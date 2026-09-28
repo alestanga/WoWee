@@ -2341,16 +2341,30 @@ constexpr int32_t kKeyBoneSpineLow = 4;
 void CharacterRenderer::setArmAnimations(uint32_t instanceId, uint32_t leftArmAnim, uint32_t rightArmAnim) {
     auto it = instances.find(instanceId);
     if (it == instances.end()) return;
-    const auto& sequences = models[it->second.modelId].data.sequences;
+    auto& instance = it->second;
+    const auto& model = models[instance.modelId].data;
+    const auto& sequences = model.sequences;
     const uint32_t anims[2] = {leftArmAnim, rightArmAnim};
     for (int arm = 0; arm < 2; arm++) {
-        it->second.armSequenceIndex[arm] = -1;
+        instance.armSequenceIndex[arm] = -1;
+        instance.armSequenceLoops[arm] = anims[arm] == anim::STAND;
         for (size_t i = 0; i < sequences.size(); i++) {
             if (sequences[i].id == anims[arm] && sequences[i].variationIndex == 0) {
-                it->second.armSequenceIndex[arm] = static_cast<int>(i);
+                instance.armSequenceIndex[arm] = static_cast<int>(i);
                 break;
             }
         }
+    }
+
+    // Which arm each bone is in - a shoulder and everything below it. Parents
+    // come first, so one pass finds both.
+    instance.boneArm.assign(model.bones.size(), -1);
+    for (size_t i = 0; i < model.bones.size(); i++) {
+        const auto& bone = model.bones[i];
+        instance.boneArm[i] = bone.keyBoneId == kKeyBoneShoulderL ? 0
+                            : bone.keyBoneId == kKeyBoneShoulderR ? 1
+                            : bone.parentBone >= 0 && static_cast<size_t>(bone.parentBone) < i
+                                ? instance.boneArm[bone.parentBone] : -1;
     }
 }
 
@@ -2385,23 +2399,20 @@ void CharacterRenderer::calculateBoneMatrices(CharacterInstance& instance) {
     // call, after it, instead of on a bone the loop happens to reach.
     static int diagFrames = 0;
 
-    // Which arm each bone is in - a shoulder and everything below it - when the
-    // arms have their own sequences. Parents come first, so one pass finds both.
-    const bool armsOwnSequences = instance.armSequenceIndex[0] >= 0 || instance.armSequenceIndex[1] >= 0;
-    std::vector<int8_t> arm(armsOwnSequences ? numBones : 0, -1);
+    const bool armsOwnSequences = (instance.armSequenceIndex[0] >= 0 || instance.armSequenceIndex[1] >= 0) &&
+                                  instance.boneArm.size() == numBones;
 
     for (size_t i = 0; i < numBones; i++) {
         const auto& bone = model.bones[i];
 
         int sequence = instance.currentSequenceIndex;
         float time = instance.animationTime;
-        if (!arm.empty()) {
-            arm[i] = bone.keyBoneId == kKeyBoneShoulderL ? 0
-                   : bone.keyBoneId == kKeyBoneShoulderR ? 1
-                   : bone.parentBone >= 0                ? arm[bone.parentBone] : -1;
-            if (arm[i] >= 0 && instance.armSequenceIndex[arm[i]] >= 0) {
-                sequence = instance.armSequenceIndex[arm[i]];
-                time = std::min(time, static_cast<float>(model.sequences[sequence].duration));
+        const int arm = armsOwnSequences ? instance.boneArm[i] : -1;
+        if (arm >= 0 && instance.armSequenceIndex[arm] >= 0) {
+            sequence = instance.armSequenceIndex[arm];
+            const float duration = static_cast<float>(model.sequences[sequence].duration);
+            if (duration > 0.0f) {
+                time = instance.armSequenceLoops[arm] ? std::fmod(time, duration) : std::min(time, duration);
             }
         }
 

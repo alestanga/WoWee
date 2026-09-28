@@ -256,6 +256,8 @@ private:
         uint32_t currentAnimationId = 0;
         int currentSequenceIndex = -1;  // Index into M2Model::sequences
         int armSequenceIndex[2] = {-1, -1};  // Left, right arm on their own sequences; -1 follows the body
+        bool armSequenceLoops[2] = {false, false};  // Idle arm loops; a reaching arm holds its last frame
+        std::vector<int8_t> boneArm;  // Per bone: 0 left arm, 1 right arm, -1 neither; built by setArmAnimations
         float animationTime = 0.0f;
         float globalSequenceTime = 0.0f; // Separate timer for global sequences (accumulates without wrapping at sequence duration)
         bool animationLoop = true;
