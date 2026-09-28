@@ -582,7 +582,7 @@ jobs:
     - name: Set up MSYS2
       uses: msys2/setup-msys2@v2
       with:
-        msystem: MINGW64
+        msystem: UCRT64
         update: false
         # See note above: avoid the stale cached keyring/DB "unknown trust" failure.
         cache: false
@@ -597,22 +597,22 @@ jobs:
       shell: msys2 {0}
       run: |
         packages=(
-          mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-ninja
-          mingw-w64-x86_64-pkgconf
-          mingw-w64-x86_64-sdl3
-          mingw-w64-x86_64-glm
-          mingw-w64-x86_64-openssl
-          mingw-w64-x86_64-zlib
-          mingw-w64-x86_64-ffmpeg
-          mingw-w64-x86_64-unicorn
-          mingw-w64-x86_64-vulkan-loader
-          mingw-w64-x86_64-vulkan-headers
-          mingw-w64-x86_64-shaderc
-          mingw-w64-x86_64-nsis
-          mingw-w64-x86_64-libtommath
-          mingw-w64-x86_64-libtomcrypt
+          mingw-w64-ucrt-x86_64-cmake
+          mingw-w64-ucrt-x86_64-gcc
+          mingw-w64-ucrt-x86_64-ninja
+          mingw-w64-ucrt-x86_64-pkgconf
+          mingw-w64-ucrt-x86_64-sdl3
+          mingw-w64-ucrt-x86_64-glm
+          mingw-w64-ucrt-x86_64-openssl
+          mingw-w64-ucrt-x86_64-zlib
+          mingw-w64-ucrt-x86_64-ffmpeg
+          mingw-w64-ucrt-x86_64-unicorn
+          mingw-w64-ucrt-x86_64-vulkan-loader
+          mingw-w64-ucrt-x86_64-vulkan-headers
+          mingw-w64-ucrt-x86_64-shaderc
+          mingw-w64-ucrt-x86_64-nsis
+          mingw-w64-ucrt-x86_64-libtommath
+          mingw-w64-ucrt-x86_64-libtomcrypt
           git
         )
         for attempt in 1 2 3; do
