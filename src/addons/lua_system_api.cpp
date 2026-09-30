@@ -5744,9 +5744,19 @@ void registerSystemLuaAPI(lua_State* L) {
                 {"GetBattlefieldTimeWaited", [](lua_State* L) -> int {
             auto* gh = getGameHandler(L);
             const int index = static_cast<int>(luaL_optnumber(L, 1, 1));
+            // Counted on from the server's last word, which comes about once
+            // a minute - answered as it stood, the minimap tooltip's time in
+            // queue sat still for a minute and then jumped.
             double ms = 0.0;
-            if (gh && index >= 1 && index <= 3)
-                ms = gh->getBgQueues()[static_cast<size_t>(index - 1)].timeInQueueSec * 1000.0;
+            if (gh && index >= 1 && index <= 3) {
+                const auto& q = gh->getBgQueues()[static_cast<size_t>(index - 1)];
+                ms = q.timeInQueueSec * 1000.0;
+                if (q.statusId == 1 &&
+                    q.queueTimeReceivedAt != std::chrono::steady_clock::time_point{}) {
+                    ms += std::chrono::duration<double, std::milli>(
+                              std::chrono::steady_clock::now() - q.queueTimeReceivedAt).count();
+                }
+            }
             lua_pushnumber(L, ms);
             return 1;
         }},

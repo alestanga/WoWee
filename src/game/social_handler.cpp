@@ -3458,7 +3458,11 @@ void SocialHandler::handleBattlefieldStatus(network::Packet& packet) {
         bgQueues_[queueSlot].maxLevel = status.maxLevel;
         bgQueues_[queueSlot].instanceId = status.instanceId;
         bgQueues_[queueSlot].isRated = status.isRated;
-        if (statusId == 1) { bgQueues_[queueSlot].avgWaitTimeSec = avgWaitSec; bgQueues_[queueSlot].timeInQueueSec = timeInQueueSec; }
+        if (statusId == 1) {
+            bgQueues_[queueSlot].avgWaitTimeSec = avgWaitSec;
+            bgQueues_[queueSlot].timeInQueueSec = timeInQueueSec;
+            bgQueues_[queueSlot].queueTimeReceivedAt = std::chrono::steady_clock::now();
+        }
         if (statusId == 2 && !wasInvite) { bgQueues_[queueSlot].inviteTimeout = inviteTimeout; bgQueues_[queueSlot].inviteReceivedTime = std::chrono::steady_clock::now(); }
     } else {
         statusChanged = true;
@@ -3466,7 +3470,8 @@ void SocialHandler::handleBattlefieldStatus(network::Packet& packet) {
 
     if (statusChanged) {
         LOG_WARNING("Battleground queue ", queueSlot + 1, ": status ", statusId,
-                    " for type ", bgTypeId, " (", bgName, ")");
+                    " for type ", bgTypeId, " (", bgName, "), average wait ",
+                    avgWaitSec, " s, waited ", timeInQueueSec, " s");
         switch (statusId) {
             case 1: owner_.addSystemChatMessage("Queued for " + bgName + "."); break;
             case 2: owner_.addSystemChatMessage(bgName + " is ready!"); break;
