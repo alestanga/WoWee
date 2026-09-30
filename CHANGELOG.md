@@ -1,5 +1,11 @@
 # Changelog
 
+## [v3.1.41] - 2026-09-30
+
+### Build
+- **The v3.1.40 build failed its interface sweep.** The battleground-join handler's pending-join marker, which only this client's unanswered-join timeout reads, was reported as state the interface was never told about. It is recorded as client bookkeeping, and the sweep passes
+- A newer push to a branch cancels the older Build and Security runs still going on it
+
 ## [v3.1.40] - 2026-09-30
 
 ### Added
