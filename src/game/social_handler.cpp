@@ -25,6 +25,15 @@
 #include <set>
 #include <vector>
 
+namespace {
+const std::pair<uint32_t, const char*> kBgNames[] = {
+    {1,"Alterac Valley"},{2,"Warsong Gulch"},{3,"Arathi Basin"},
+    {4,"Nagrand Arena"},{5,"Blade's Edge Arena"},{6,"All Arenas"},
+    {7,"Eye of the Storm"},{8,"Ruins of Lordaeron"},{9,"Strand of the Ancients"},
+    {10,"Dalaran Sewers"},{11,"Ring of Valor"},{30,"Isle of Conquest"},{32,"Random Battleground"},
+};
+}  // namespace
+
 namespace wowee {
 namespace game {
 
@@ -733,8 +742,52 @@ void SocialHandler::registerOpcodes(DispatchTable& table) {
     table[Opcode::SMSG_REMOVED_FROM_PVP_QUEUE] = [this](network::Packet& /*packet*/) {
         owner_.addSystemChatMessage("You have been removed from the PvP queue.");
     };
-    table[Opcode::SMSG_GROUP_JOINED_BATTLEGROUND] = [this](network::Packet& /*packet*/) {
-        owner_.addSystemChatMessage("Your group has joined the battleground.");
+    // The answer to a join, and most often a refusal. A positive value is the
+    // battleground joined; the negative ones are the reasons a queue was
+    // refused. It was read as "joined" whatever it said, so a Deserter or a
+    // third queue was reported as success and nothing appeared on the minimap.
+    table[Opcode::SMSG_GROUP_JOINED_BATTLEGROUND] = [this](network::Packet& packet) {
+        if (!packet.hasRemaining(4)) return;
+        const int32_t result = static_cast<int32_t>(packet.readUInt32());
+        std::string msg;
+        switch (result) {
+            case -1: return;  // nothing to say
+            case 0:   msg = "Your group has joined a battleground queue, but you are not eligible"; break;
+            case -2:  msg = "You cannot join the battleground yet because you or one of your party members is flagged as a Deserter."; break;
+            case -3:  msg = "Incorrect party size for this arena."; break;
+            case -4:  msg = "You can only be queued for 2 battles at once"; break;
+            case -5:  msg = "You cannot queue for a rated match while queued for other battles"; break;
+            case -6:  msg = "You cannot queue for another battle while queued for a rated arena match"; break;
+            case -7:  msg = "Your team has left the arena queue"; break;
+            case -8:  msg = "You can't do that in a battleground."; break;
+            case -10: msg = "Cannot join the queue unless all members of your party are in the same battleground level range."; break;
+            case -11: {
+                std::string who = "A party member";
+                if (packet.hasRemaining(8)) {
+                    auto it = owner_.getPlayerNameCache().find(packet.readUInt64());
+                    if (it != owner_.getPlayerNameCache().end() && !it->second.empty()) who = it->second;
+                }
+                msg = who + " was unavailable to join the queue.";
+                break;
+            }
+            case -12: msg = "Join as a group failed"; break;
+            case -13: msg = "You cannot queue for a battleground or arena while using the dungeon system."; break;
+            case -14: msg = "Can't do that while in a Random Battleground queue."; break;
+            case -15: msg = "Can't queue for Random Battleground while in another Battleground queue."; break;
+            default:
+                if (result > 0) {
+                    std::string bgName = "a battleground";
+                    for (const auto& kv : kBgNames)
+                        if (kv.first == static_cast<uint32_t>(result)) { bgName = kv.second; break; }
+                    owner_.addSystemChatMessage("Your group has joined the queue for " + bgName);
+                    return;
+                }
+                msg = "Could not join the battleground queue (" + std::to_string(result) + ").";
+                break;
+        }
+        LOG_WARNING("Battleground join refused: ", result, " - ", msg);
+        owner_.addUIError(msg);
+        owner_.addSystemChatMessage(msg);
     };
     table[Opcode::SMSG_JOINED_BATTLEGROUND_QUEUE] = [this](network::Packet& /*packet*/) {
         owner_.addSystemChatMessage("You have joined the battleground queue.");
@@ -3370,12 +3423,6 @@ void SocialHandler::handleBattlefieldStatus(network::Packet& packet) {
     const uint32_t bgTypeId = status.bgTypeId;
     const uint32_t statusId = status.statusId;
 
-    static const std::pair<uint32_t, const char*> kBgNames[] = {
-        {1,"Alterac Valley"},{2,"Warsong Gulch"},{3,"Arathi Basin"},
-        {4,"Nagrand Arena"},{5,"Blade's Edge Arena"},{6,"All Arenas"},
-        {7,"Eye of the Storm"},{8,"Ruins of Lordaeron"},{9,"Strand of the Ancients"},
-        {10,"Dalaran Sewers"},{11,"Ring of Valor"},{30,"Isle of Conquest"},{32,"Random Battleground"},
-    };
     std::string bgName = "Battleground";
     for (const auto& kv : kBgNames) { if (kv.first == bgTypeId) { bgName = kv.second; break; } }
     if (bgName == "Battleground") bgName = "Battleground #" + std::to_string(bgTypeId);
