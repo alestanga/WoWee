@@ -1204,6 +1204,7 @@ private:
     /// Both spawn paths need it and each used to have its own copy.
     void seedInstanceAnimation(const M2ModelGPU& model, uint32_t modelId,
                                M2Instance& instance);
+    void seedUnanimatedSequence(const M2ModelGPU& model, M2Instance& instance);
 
     void destroyInstanceBones(M2Instance& inst, bool defer = false);
 };

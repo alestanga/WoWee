@@ -410,6 +410,10 @@ M2ClassificationResult classifyM2Model(
         "outcrop",   "pillar",    "pylon",     "roof",      "rock",
         "ruin",      "shield",    "sign",      "stair",     "statue",
         "stone",     "tomb",      "tower",     "wall",
+        // Not a structure, but no more a plant: StranglethornWaterfall01 read
+        // as foliage from the "thorn" in the zone's name, swayed in the wind,
+        // and had its animation turned off with the rest of the foliage.
+        "waterfall",
     });
     const TokenMatch structureHit = lastMatchAny(n, kStructureTokens);
 

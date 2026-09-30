@@ -88,6 +88,19 @@ void M2Renderer::seedInstanceAnimation(const M2ModelGPU& model, uint32_t modelId
     }
 }
 
+// A model the bone loop does not step still plays its first sequence: its
+// texture scroll and its emitters are keyed to it, and update() wraps the
+// clock at this length. Left at zero, the length was unknown, the clock was
+// wrapped at a fixed 3.3 s instead, and a waterfall whose scroll lasts 2.6 s
+// stood still for the difference every lap.
+void M2Renderer::seedUnanimatedSequence(const M2ModelGPU& model, M2Instance& instance) {
+    if (model.sequences.empty() || model.sequences[0].duration == 0) return;
+    instance.currentSequenceIndex = 0;
+    instance.idleSequenceIndex = 0;
+    instance.animDuration = static_cast<float>(model.sequences[0].duration);
+    instance.animTime = static_cast<float>(randRange(model.sequences[0].duration));
+}
+
 uint32_t M2Renderer::createInstance(uint32_t modelId, const glm::vec3& position,
                                      const glm::vec3& rotation, float scale,
                                      bool allowPositionDedup) {
@@ -157,6 +170,8 @@ uint32_t M2Renderer::createInstance(uint32_t modelId, const glm::vec3& position,
     const auto& mdl = mdlRef;
     if (mdl.hasAnimation && !mdl.disableAnimation) {
         seedInstanceAnimation(mdlRef, modelId, instance);
+    } else {
+        seedUnanimatedSequence(mdlRef, instance);
     }
 
     // Register in dedup map before pushing (uses original position, not ground-adjusted)
@@ -262,11 +277,9 @@ uint32_t M2Renderer::createInstanceWithMatrix(uint32_t modelId, const glm::mat4&
         // instance at zero puts a courtyard of identical torches in lockstep,
         // so the phase is spread.
         //
-        // createInstance above does not do this, so doodads spawned by
-        // position keep the lockstep this avoids. Which of the two is right is
-        // a question for whoever next looks at particle timing; they differ
-        // today and this is the difference.
+        // createInstance above now does the same.
         instance.animTime = randFloat(0.0f, 10000.0f);
+        seedUnanimatedSequence(mdl2, instance);
     }
 
     // Register in dedup map

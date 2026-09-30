@@ -297,6 +297,13 @@ TEST_CASE("a small tree with leaf emitters is a tree, not an effect",
     CHECK(leaves.isSpellEffect);
 }
 
+TEST_CASE("a waterfall is not foliage, whatever zone it is named for",
+          "[m2][classifier][foliage]") {
+    CHECK_FALSE(classify("StranglethornWaterfall01").isFoliageLike);
+    CHECK_FALSE(classify("StranglethornWaterfall01").disableAnimation);
+    CHECK(classify("StranglethornWaterfall01").isWaterfall);
+}
+
 // "street" contains "tree", which this list already knew about for StreetSign
 // and not for StreetLamp - so Stormwind's ironwork lamps swayed in the wind.
 TEST_CASE("a street lamp is ironwork, not a sapling", "[m2][classifier]") {
