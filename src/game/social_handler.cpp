@@ -3463,6 +3463,8 @@ void SocialHandler::handleBattlefieldStatus(network::Packet& packet) {
     }
 
     if (statusChanged) {
+        LOG_WARNING("Battleground queue ", queueSlot + 1, ": status ", statusId,
+                    " for type ", bgTypeId, " (", bgName, ")");
         switch (statusId) {
             case 1: owner_.addSystemChatMessage("Queued for " + bgName + "."); break;
             case 2: owner_.addSystemChatMessage(bgName + " is ready!"); break;

@@ -4462,7 +4462,7 @@ static int lua_JoinBattlefield(lua_State* L) {
     // is not what the real client sends. Nought is.
     const uint64_t battlemaster =
         gh->isGossipWindowOpen() ? gh->getCurrentGossip().npcGuid : 0;
-    LOG_INFO("CMSG_BATTLEMASTER_JOIN: bgTypeId=", bgTypeId, " instance=", instanceId,
+    LOG_WARNING("CMSG_BATTLEMASTER_JOIN: bgTypeId=", bgTypeId, " instance=", instanceId,
              " asGroup=", asGroup, " battlemaster=0x", std::hex, battlemaster, std::dec);
     gh->joinBattlefield(battlemaster, bgTypeId, instanceId, asGroup);
     return 0;
