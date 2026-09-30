@@ -304,6 +304,19 @@ TEST_CASE("a waterfall is not foliage, whatever zone it is named for",
     CHECK(classify("StranglethornWaterfall01").isWaterfall);
 }
 
+TEST_CASE("a moored boat is a boat; a wreck, a sign and a gate are not",
+          "[m2][classifier]") {
+    for (const char* n : {"RowBoat01", "BE_RowBoat", "DarkshoreBoat", "SwampBoat01", "TS_Boat_01"}) {
+        INFO(n);
+        CHECK(classify(n).isBoat);
+    }
+    for (const char* n : {"WreckedRowBoat", "BE_RowBoatWrecked", "HumanBoatHouseSign",
+                          "Alliance_Boat_Gate_BG", "RowBoat01_Vehicle"}) {
+        INFO(n);
+        CHECK_FALSE(classify(n).isBoat);
+    }
+}
+
 // "street" contains "tree", which this list already knew about for StreetSign
 // and not for StreetLamp - so Stormwind's ironwork lamps swayed in the wind.
 TEST_CASE("a street lamp is ironwork, not a sapling", "[m2][classifier]") {

@@ -562,6 +562,13 @@ M2ClassificationResult classifyM2Model(
     // lamps in glass and not cones of light. They were added here while
     // hunting for the searchlight and the debug colour showed them lighting
     // up instead of it.
+    // A rowboat, a canoe, a swamp punt: the craft left moored in a canal or on
+    // a lake. A wreck lies where it sank, a sign and a boathouse are buildings,
+    // a battleground gate is named for the boat it guards, and a vehicle is a
+    // creature the server moves.
+    r.isBoat = (has(n, "boat") || has(n, "canoe")) &&
+               !has(n, "wreck") && !has(n, "boathouse") && !has(n, "sign") &&
+               !has(n, "gate") && !has(n, "vehicle");
     r.isTransportDoodad = has(n, "transportship_sails")
                        || has(n, "icebreaker_paddlewheel");
 
