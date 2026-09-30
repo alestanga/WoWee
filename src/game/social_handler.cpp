@@ -3416,7 +3416,13 @@ void SocialHandler::handleBattlefieldStatus(network::Packet& packet) {
             default: break;
         }
     }
-    if (owner_.addonEventCallbackRef()) owner_.addonEventCallbackRef()("UPDATE_BATTLEFIELD_STATUS", {std::to_string(statusId)});
+    // The argument is which queue changed, counted from one, not what it
+    // changed to. battlefieldframe.lua takes it as the index and raises the
+    // "enter battleground" prompt only for the queue it names - handed the
+    // status, an invitation (2) to the first queue named the second, and the
+    // prompt never came up however long the player had waited for it.
+    if (owner_.addonEventCallbackRef())
+        owner_.addonEventCallbackRef()("UPDATE_BATTLEFIELD_STATUS", {std::to_string(queueSlot + 1)});
 }
 
 void SocialHandler::handleBattlefieldList(network::Packet& packet) {
