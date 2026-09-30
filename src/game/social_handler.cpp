@@ -748,6 +748,7 @@ void SocialHandler::registerOpcodes(DispatchTable& table) {
     // third queue was reported as success and nothing appeared on the minimap.
     table[Opcode::SMSG_GROUP_JOINED_BATTLEGROUND] = [this](network::Packet& packet) {
         if (!packet.hasRemaining(4)) return;
+        bgJoinPendingType_ = 0;  // answered
         const int32_t result = static_cast<int32_t>(packet.readUInt32());
         std::string msg;
         switch (result) {
@@ -3419,6 +3420,7 @@ void SocialHandler::handleBattlefieldStatus(network::Packet& packet) {
         return;
     }
     const uint32_t queueSlot = status.queueSlot;
+    bgJoinPendingType_ = 0;  // answered
     const uint8_t arenaType = status.arenaType;
     const uint32_t bgTypeId = status.bgTypeId;
     const uint32_t statusId = status.statusId;
@@ -3538,6 +3540,8 @@ void SocialHandler::joinBattlefield(uint64_t battlemasterGuid, uint32_t bgTypeId
     packet.writeUInt32(instanceId);
     packet.writeUInt8(asGroup ? 1 : 0);
     owner_.getSocket()->send(packet);
+    bgJoinPendingType_ = bgTypeId;
+    bgJoinWaitSec_ = 5.0f;
 }
 
 // CMSG_BATTLEFIELD_LIST: ask which instances of one battleground are running.
@@ -4617,6 +4621,24 @@ void SocialHandler::handlePvpLogData(network::Packet& packet) {
 }
 
 void SocialHandler::updateLogoutCountdown(float deltaTime) {
+    // A queue request the server let pass without a word. A realm that keeps
+    // a battleground back - ChromieCraft opens the random one at level sixty,
+    // and only through a command of its own - drops the join unanswered, and
+    // the panel then did nothing at all when its button was pressed.
+    if (bgJoinPendingType_ != 0) {
+        bgJoinWaitSec_ -= deltaTime;
+        if (bgJoinWaitSec_ <= 0.0f) {
+            std::string name = "that battleground";
+            for (const auto& kv : kBgNames)
+                if (kv.first == bgJoinPendingType_) { name = kv.second; break; }
+            const std::string msg = "The server did not answer the request to queue for " +
+                                    name + " - this realm may not offer it to you.";
+            LOG_WARNING("Battleground join unanswered: type ", bgJoinPendingType_);
+            owner_.addUIError(msg);
+            owner_.addSystemChatMessage(msg);
+            bgJoinPendingType_ = 0;
+        }
+    }
     if (loggingOut_ && logoutCountdown_ > 0.0f) {
         logoutCountdown_ -= deltaTime;
         if (logoutCountdown_ < 0.0f) logoutCountdown_ = 0.0f;
