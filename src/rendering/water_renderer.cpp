@@ -505,7 +505,8 @@ void WaterRenderer::createSceneHistoryResources(VkExtent2D extent, VkFormat colo
 
         VkDescriptorBufferInfo reflUBOInfo{};
         reflUBOInfo.buffer = reflectionUBO;
-        reflUBOInfo.offset = 0;
+        // Each frame in flight reads its own slot; see uploadFrameUBO.
+        reflUBOInfo.offset = static_cast<VkDeviceSize>(f) * kFrameUBOStride;
         reflUBOInfo.range = sizeof(WaterFrameUBOData);
 
         std::vector<VkWriteDescriptorSet> writes;
@@ -1739,7 +1740,7 @@ void WaterRenderer::createReflectionResources() {
     // --- Reflection UBO ---
     VkBufferCreateInfo bufCI{};
     bufCI.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufCI.size = sizeof(WaterFrameUBOData);
+    bufCI.size = kFrameUBOStride * SCENE_HISTORY_FRAMES;
     bufCI.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
     VmaAllocationCreateInfo uboAllocCI{};
@@ -1758,7 +1759,10 @@ void WaterRenderer::createReflectionResources() {
     WaterFrameUBOData initData{};
     initData.reflViewProj = glm::mat4(1.0f);
     if (reflectionUBOMapped) {
-        std::memcpy(reflectionUBOMapped, &initData, sizeof(initData));
+        for (uint32_t f = 0; f < SCENE_HISTORY_FRAMES; ++f) {
+            std::memcpy(static_cast<char*>(reflectionUBOMapped) + f * kFrameUBOStride,
+                        &initData, sizeof(initData));
+        }
     }
 
     // Transition reflection color image to shader-read so first frame doesn't read undefined
@@ -1867,9 +1871,16 @@ void WaterRenderer::updateReflectionUBO(const glm::mat4& reflViewProj) {
     uploadFrameUBO();
 }
 
+// Into the slot of the frame being recorded. There was one slot for every frame
+// in flight, so the reflection matrix was rewritten for the next frame while the
+// GPU was still drawing water with it for the last one - the reflection was
+// sampled through a camera a frame out of step with the one that rendered it,
+// and shook whenever the view moved.
 void WaterRenderer::uploadFrameUBO() {
-    if (!reflectionUBOMapped) return;
-    std::memcpy(reflectionUBOMapped, &frameUBO_, sizeof(frameUBO_));
+    if (!reflectionUBOMapped || !vkCtx) return;
+    const uint32_t slot = vkCtx->getCurrentFrame() % SCENE_HISTORY_FRAMES;
+    std::memcpy(static_cast<char*>(reflectionUBOMapped) + slot * kFrameUBOStride,
+                &frameUBO_, sizeof(frameUBO_));
 }
 
 // Disturbance trail. Points are dropped along the path rather than parented to
