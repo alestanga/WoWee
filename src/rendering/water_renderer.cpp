@@ -1098,6 +1098,9 @@ void WaterRenderer::clear() {
 
 void WaterRenderer::render(VkCommandBuffer cmd, VkDescriptorSet perFrameSet,
                             const Camera& camera, float /*time*/, bool use1x, uint32_t frameIndex) {
+    // The wake as it stands, into this frame's slot - safe now, the frame has
+    // waited for the GPU to finish with it.
+    uploadFrameUBO();
     VkPipeline pipeline = (use1x && water1xPipeline) ? water1xPipeline : waterPipeline;
     if (!renderingEnabled || surfaces.empty() || !pipeline) {
         if (renderDiagCounter_++ % 300 == 0 && !surfaces.empty()) {
@@ -1975,7 +1978,10 @@ void WaterRenderer::updateWake(float deltaTime, const glm::vec2& pos,
         frameUBO_.wakePoints[i] = glm::vec4(p.pos.x, p.pos.y, age01, p.strength);
     }
     frameUBO_.wakeBounds = glm::vec4(centre.x, centre.y, cullRadius, static_cast<float>(count));
-    uploadFrameUBO();
+    // Uploaded when the frame is recorded, not here: this runs before the frame
+    // has waited for its slot, and the slot it would name is still being read
+    // by the frame the GPU is drawing.
+    
 }
 
 // ==============================================================
