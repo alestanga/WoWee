@@ -1094,14 +1094,28 @@ void TerrainRenderer::renderShadow(VkCommandBuffer cmd, const glm::mat4& lightSp
         megaShadowBound = true;
     }
 
+    // Culled against the map's own footprint, not a sphere round the player.
+    // The map is a box reaching hundreds of yards toward the sun, and a ridge
+    // that far off in that direction is exactly what shades the ground and the
+    // air round the player - the sphere left it out, so the sun lit the mist
+    // straight through it. A chunk is kept if its centre lands on the map
+    // across the light, at any depth along it; the orthographic scale of the
+    // matrix is what turns the chunk's radius into the same units.
+    (void)shadowCenter;
+    (void)shadowRadius;
+    const float scaleX = glm::length(glm::vec3(lightSpaceMatrix[0][0], lightSpaceMatrix[1][0],
+                                               lightSpaceMatrix[2][0]));
+    const float scaleY = glm::length(glm::vec3(lightSpaceMatrix[0][1], lightSpaceMatrix[1][1],
+                                               lightSpaceMatrix[2][1]));
+
     for (const auto& chunk : chunks) {
         if (!chunk.isValid()) continue;
 
-        // Sphere-cull chunk against shadow region
-        glm::vec3 diff = chunk.boundingSphereCenter - shadowCenter;
-        float distSq = glm::dot(diff, diff);
-        float combinedRadius = shadowRadius + chunk.boundingSphereRadius;
-        if (distSq > combinedRadius * combinedRadius) continue;
+        const glm::vec4 ls = lightSpaceMatrix * glm::vec4(chunk.boundingSphereCenter, 1.0f);
+        if (std::abs(ls.x) > 1.0f + chunk.boundingSphereRadius * scaleX ||
+            std::abs(ls.y) > 1.0f + chunk.boundingSphereRadius * scaleY) {
+            continue;
+        }
 
         if (useMegaShadow && chunk.megaBaseVertex >= 0) {
             // Rebound after a fallback chunk, for the reason given in the main
