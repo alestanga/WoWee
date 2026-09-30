@@ -3529,15 +3529,26 @@ void SocialHandler::declineBattlefield(uint32_t queueSlot) {
     if (owner_.getState() != WorldState::IN_WORLD || !owner_.getSocket()) return;
     const BgQueueSlot* slot = nullptr;
     if (queueSlot == 0xFFFFFFFF) { for (const auto& s : bgQueues_) { if (s.statusId == 2) { slot = &s; break; } } }
-    else if (queueSlot < bgQueues_.size() && bgQueues_[queueSlot].statusId == 2) slot = &bgQueues_[queueSlot];
+    // A named queue is left whether it has popped or is still waiting: the
+    // server takes the same refusal for both.
+    else if (queueSlot < bgQueues_.size() &&
+             (bgQueues_[queueSlot].statusId == 1 || bgQueues_[queueSlot].statusId == 2))
+        slot = &bgQueues_[queueSlot];
     if (!slot) { owner_.addSystemChatMessage("No battleground invitation pending."); return; }
+    const bool wasInvite = slot->statusId == 2;
+    const std::string bgName = slot->bgName;
     network::Packet pkt(wireOpcode(Opcode::CMSG_BATTLEFIELD_PORT));
     pkt.writeUInt8(slot->arenaType); pkt.writeUInt8(0x00); pkt.writeUInt32(slot->bgTypeId);
     pkt.writeUInt16(0x0000); pkt.writeUInt8(0);
     owner_.getSocket()->send(pkt);
     uint32_t clearSlot = slot->queueSlot;
     if (clearSlot < bgQueues_.size()) bgQueues_[clearSlot] = BgQueueSlot{};
-    owner_.addSystemChatMessage("Battleground invitation declined.");
+    owner_.addSystemChatMessage(wasInvite ? "Battleground invitation declined."
+                                          : "Left the queue for " + bgName + ".");
+    // The minimap icon and the panel read the queues on this event; without
+    // it they kept showing the queue until the server's next word.
+    if (owner_.addonEventCallbackRef())
+        owner_.addonEventCallbackRef()("UPDATE_BATTLEFIELD_STATUS", {std::to_string(clearSlot + 1)});
 }
 
 void SocialHandler::requestPvpLog() {
