@@ -625,6 +625,7 @@ private:
     // Duel
     bool pendingDuelRequest_    = false;
     uint64_t duelChallengerGuid_= 0;
+    uint64_t duelArbiterGuid_   = 0;   // the duel flag; both answers name it
     std::string duelChallengerName_;
     uint32_t duelCountdownMs_   = 0;
     std::chrono::steady_clock::time_point duelCountdownStartedAt_{};

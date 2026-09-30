@@ -1732,7 +1732,7 @@ void SocialHandler::respondToReadyCheck(bool ready) {
 void SocialHandler::acceptDuel() {
     if (!pendingDuelRequest_ || owner_.getState() != WorldState::IN_WORLD || !owner_.getSocket()) return;
     pendingDuelRequest_ = false;
-    auto pkt = DuelAcceptPacket::build();
+    auto pkt = DuelAcceptPacket::build(duelArbiterGuid_);
     owner_.getSocket()->send(pkt);
     owner_.addSystemChatMessage("You accept the duel.");
 }
@@ -1740,7 +1740,7 @@ void SocialHandler::acceptDuel() {
 void SocialHandler::forfeitDuel() {
     if (owner_.getState() != WorldState::IN_WORLD || !owner_.getSocket()) return;
     pendingDuelRequest_ = false;
-    auto packet = DuelCancelPacket::build();
+    auto packet = DuelCancelPacket::build(duelArbiterGuid_);
     owner_.getSocket()->send(packet);
     owner_.addSystemChatMessage("You have forfeited the duel.");
 }
@@ -1767,11 +1767,18 @@ void SocialHandler::reportPlayer(uint64_t targetGuid, const std::string& reason)
 
 void SocialHandler::handleDuelRequested(network::Packet& packet) {
     if (!packet.hasRemaining(16)) { packet.skipAll(); return; }
+    // The flag first, then the challenger. Read the other way round, the
+    // challenger was the flag - a game object no name lookup could find, so
+    // the challenge came from a hex number - and the flag, which the accept
+    // and the refusal both have to name, was thrown away.
+    duelArbiterGuid_ = packet.readUInt64();
     duelChallengerGuid_ = packet.readUInt64();
-    // The duel flag's guid follows, and nothing here wants it - the arbiter
-    // object is the server's business. Read rather than skipped so the two
-    // stay one statement apart if a third field is ever added.
-    packet.readUInt64();
+    // The server sends this to both players. The one who issued the challenge
+    // keeps the flag, to be able to call it off, and is not asked to accept it.
+    if (duelChallengerGuid_ == owner_.getPlayerGuid()) {
+        pendingDuelRequest_ = false;
+        return;
+    }
     duelChallengerName_.clear();
     auto entity = owner_.getEntityManager().getEntity(duelChallengerGuid_);
     if (auto* unit = dynamic_cast<Unit*>(entity.get()))
