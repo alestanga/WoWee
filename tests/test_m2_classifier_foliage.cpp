@@ -282,6 +282,21 @@ TEST_CASE("models under PARTICLEEMITTERS are VFX, not props",
     }
 }
 
+TEST_CASE("a small tree with leaf emitters is a tree, not an effect",
+          "[m2][classifier][foliage]") {
+    const auto tree = classifyM2Model(
+        "WORLD\\KALIMDOR\\AZSHARA\\PASSIVEDOODADS\\TREES\\AZR_TREE01.M2",
+        glm::vec3(-10.0f), glm::vec3(10.0f), 197, 3);
+    CHECK_FALSE(tree.isSpellEffect);
+    CHECK(tree.isFoliageLike);
+
+    // Falling leaves with no tree under them stay an effect.
+    const auto leaves = classifyM2Model(
+        "WORLD\\EXPANSION02\\DOODADS\\DRAGONBLIGHT\\DB_LEAVES_FALL.M2",
+        glm::vec3(-10.0f), glm::vec3(10.0f), 0, 3);
+    CHECK(leaves.isSpellEffect);
+}
+
 // "street" contains "tree", which this list already knew about for StreetSign
 // and not for StreetLamp - so Stormwind's ironwork lamps swayed in the wind.
 TEST_CASE("a street lamp is ironwork, not a sapling", "[m2][classifier]") {

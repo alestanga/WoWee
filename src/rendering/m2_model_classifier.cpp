@@ -630,8 +630,13 @@ M2ClassificationResult classifyM2Model(
     const bool steamVehicle = has(n, "tonk") || has(n, "tank");
     const bool steamVfx = has(n, "steam") && !steamVehicle
                         && emitterCount >= 1 && vertexCount <= 200;
+    // A small mesh carrying several emitters is usually an effect, but a
+    // tree is a tree however few vertices it has. AZR_Tree01 is 197 vertices
+    // with three falling-leaf emitters; taken for an effect, its alpha-keyed
+    // canopy was drawn additively, and Azshara's forest turned translucent.
+    const bool particleDominated = emitterCount >= 3 && vertexCount <= 200 && !treeLike;
     r.isSpellEffect = hasAny(n, kEffectTokens) || steamVfx || particleEmitterVfx
-                    || (emitterCount >= 3 && vertexCount <= 200);
+                    || particleDominated;
     // Instance portals are spell effects too.
     if (r.isInstancePortal) r.isSpellEffect = true;
 
