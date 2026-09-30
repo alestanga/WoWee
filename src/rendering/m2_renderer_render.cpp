@@ -417,9 +417,21 @@ void M2Renderer::update(float deltaTime, const glm::vec3& cameraPos, const glm::
     // --- Normal M2 animation update ---
     // Advance animTime for ALL instances (needed for texture UV animation on static doodads).
     // This is a tight loop touching only one float per instance - no hash lookups.
+    //
+    // An instance the bone loop below does not step is wrapped here, at the
+    // length of its own sequence. A texture track is sampled against this
+    // time and holds its last key once the time runs past the end, so a
+    // waterfall with no bones of its own scrolled once after it loaded and
+    // then stood still, and one with emitters - wrapped at a fixed 3.3 s
+    // below, whatever its sequence - stopped for the rest of each lap.
     for (auto& instance : instances) {
         instance.animTime += dtMs;
         instance.globalSequenceTime += dtMs;
+        const bool steppedBelow = instance.cachedHasAnimation && !instance.cachedDisableAnimation;
+        if (!steppedBelow && instance.animDuration > 0.0f &&
+            instance.animTime >= instance.animDuration) {
+            instance.animTime = std::fmod(instance.animTime, instance.animDuration);
+        }
     }
 
     // The sky model's clock, when this is the renderer that draws one.
@@ -453,9 +465,12 @@ void M2Renderer::update(float deltaTime, const glm::vec3& cameraPos, const glm::
     // particle emission cycle (~3s for torch/campfire effects) while preventing float
     // precision loss that accumulates over hours of runtime.
     static constexpr float kParticleWrapMs = 3333.0f;
+    // Only for those with no sequence length to wrap at; the rest were
+    // wrapped at their own above.
     for (size_t idx : particleOnlyInstanceIndices_) {
         if (idx >= instances.size()) continue;
         auto& instance = instances[idx];
+        if (instance.animDuration > 0.0f) continue;
         // Use iterative subtraction instead of fmod() to preserve precision
         while (instance.animTime > kParticleWrapMs) {
             instance.animTime -= kParticleWrapMs;
