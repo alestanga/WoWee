@@ -30,7 +30,7 @@ struct WaterMaterialUBO {
     float waterAlpha;
     float shimmerStrength;
     float alphaScale;
-    float _pad;
+    float bodyFloor;   // least the water's own colour shows, however shallow
 };
 
 // Push constants matching water.vert.glsl
@@ -599,13 +599,23 @@ void WaterRenderer::updateMaterialUBO(WaterSurface& surface) {
 
     bool canalProfile = (surface.wmoId != 0) || (surface.liquidType == 5);
     float shimmerStrength = canalProfile ? 0.95f : 0.50f;
-    float alphaScale = canalProfile ? 0.90f : 1.00f;
+    // A canal is a couple of yards deep, and the water's colour is weighted by
+    // depth - so it came out as clear glass over the stone bed. Its own colour
+    // is given a floor, a little deeper than a lake's, and it is no longer
+    // thinned below open water.
+    float alphaScale = canalProfile ? 1.15f : 1.00f;
+    float bodyFloor = 0.0f;
+    if (canalProfile && (surface.liquidType == 0 || (surface.liquidType - 1) % 4 < 2)) {
+        color = glm::vec4(0.08f, 0.30f, 0.40f, 1.0f);
+        bodyFloor = 0.45f;
+    }
 
     WaterMaterialUBO mat{};
     mat.waterColor = color;
     mat.waterAlpha = alpha;
     mat.shimmerStrength = shimmerStrength;
     mat.alphaScale = alphaScale;
+    mat.bodyFloor = bodyFloor;
 
     // Create UBO
     VkBufferCreateInfo bufCI{};
