@@ -1650,7 +1650,7 @@ void GameScreen::processTargetInput(game::GameHandler& gameHandler) {
                 if (closestGuid != 0 && gameHandler.isAwaitingUnitTarget()) {
                     gameHandler.completeItemUseOnUnit(closestGuid);
                 } else if (closestGuid != 0) {
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(WOWEE_IOS)
                     if (gameHandler.getTargetGuid() == closestGuid) {
                         auto tapped = gameHandler.getEntityManager().getEntity(closestGuid);
                         if (tapped && tapped->getType() == game::ObjectType::UNIT) {
