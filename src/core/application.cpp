@@ -1507,7 +1507,10 @@ void Application::run() {
                 if (window && SDL_GetWindowSafeArea(window->getSDLWindow(), &safe)) {
                     ui::touchControls().setSafeArea(safe);
                 }
-                ui::touchControls().handleEvent(event, tw, th);
+                // With a mouse/trackpad attached the touch overlay is hidden and
+                // the client behaves like the desktop build; do not consume
+                // finger events for the stick.
+                if (!SDL_HasMouse()) ui::touchControls().handleEvent(event, tw, th);
             }
 
             // A fold, a rotation or a move to another display changes what the
@@ -3770,14 +3773,15 @@ void Application::updateInGame(float deltaTime, const char*& updateCheckpoint) {
     inGameStep = "gameHandler update";
     updateCheckpoint = "in_game: gameHandler update";
 #if defined(__ANDROID__) || defined(WOWEE_IOS)
-    ui::touchControls().update();
+    if (!SDL_HasMouse()) ui::touchControls().update();
     if (renderer && renderer->getCameraController()) {
         auto* cam = renderer->getCameraController();
         ui::touchControls().setCameraController(cam);
-        // The touch controls turn the view themselves, from whichever finger is
-        // doing it. SDL's own translation of the first finger must not turn it
-        // as well, or a drag counts twice and the stick swings the camera.
-        cam->setRotationSuppressed(true);
+        // Only suppress SDL's own mouse-look translation while the touch stick
+        // is driving the camera; with a real mouse attached we want normal
+        // mouse look, like the desktop build.
+        cam->setRotationSuppressed(!SDL_HasMouse() &&
+                                  ui::touchControls().isSteering());
         cam->setSteering(ui::touchControls().isSteering() ||
                          ui::gamepadControls().isSteering());
     }
@@ -4184,8 +4188,10 @@ void Application::render() {
 #if defined(__ANDROID__) || defined(WOWEE_IOS)
     // Drawn into the background list, under everything the interface puts on
     // screen, and only while a thumb is holding it.
-    ui::touchControls().setInWorld(state == AppState::IN_GAME);
-    ui::touchControls().draw();
+    if (!SDL_HasMouse()) {
+        ui::touchControls().setInWorld(state == AppState::IN_GAME);
+        ui::touchControls().draw();
+    }
 #endif
 
     renderingFrame_ = true;
