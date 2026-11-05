@@ -1,5 +1,6 @@
 #include "core/application.hpp"
 #include "core/config_paths.hpp"
+#include "core/ios_platform.hpp"
 #include "core/logger.hpp"
 #include "core/version.hpp"
 #include <exception>
@@ -130,6 +131,11 @@ static void selectUserDataPath() {
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
+#if defined(WOWEE_IOS)
+    // Point the client at the app's Documents directory (file-sharing
+    // accessible) before anything opens a file.
+    wowee::core::iosSetupDataPaths();
+#endif
 #if defined(__ANDROID__) || defined(WOWEE_IOS)
     // Everything after this opens its files relative to the working directory,
     // which on a device is not a directory that holds any of them.
