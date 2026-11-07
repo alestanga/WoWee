@@ -1289,6 +1289,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     # compile the audio TU as Objective-C++ so its headers parse.
     set_source_files_properties(src/audio/audio_engine.cpp PROPERTIES LANGUAGE OBJCXX)
 
+    # Compile the launch screen storyboard into the bundle (Xcode handles this
+    # when the file is part of the target sources).
+    target_sources(wowee PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/ios/LaunchScreen.storyboard")
+    set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/ios/LaunchScreen.storyboard"
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
     # Link MoltenVK (static) when available, so Vulkan symbols resolve at
     # link time instead of via dynamic_lookup at runtime.  The framework lives
     # under extern/MoltenVK (downloaded separately; see tools/build-ios-deps.sh).
