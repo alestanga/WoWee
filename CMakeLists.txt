@@ -1295,6 +1295,22 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/ios/LaunchScreen.storyboard"
         PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
+    # Compile the asset catalog (app icons) into Assets.car in the bundle via
+    # actool, since CMake's Xcode generator does not drive it automatically.
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets")
+        add_custom_command(TARGET wowee POST_BUILD
+            COMMAND actool
+                "${CMAKE_CURRENT_SOURCE_DIR}/ios/Assets.xcassets"
+                --compile "$<TARGET_FILE_DIR:wowee>"
+                --platform iphoneos
+                --minimum-deployment-target 16.0
+                --app-icon AppIcon
+                --output-partial-info-plist "${CMAKE_BINARY_DIR}/assetcatalog_info.plist"
+            COMMENT "Compiling asset catalog (AppIcon)"
+            VERBATIM
+        )
+    endif()
+
     # Link MoltenVK (static) when available, so Vulkan symbols resolve at
     # link time instead of via dynamic_lookup at runtime.  The framework lives
     # under extern/MoltenVK (downloaded separately; see tools/build-ios-deps.sh).
