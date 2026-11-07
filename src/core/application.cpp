@@ -1,4 +1,7 @@
 #include "core/application.hpp"
+#if defined(WOWEE_IOS)
+#include "core/ios_platform.hpp"
+#endif
 #include "core/frame_pacer.hpp"
 #include "core/env_flag.hpp"
 #include "core/character_paths.hpp"
@@ -118,6 +121,22 @@ namespace wowee {
 namespace core {
 
 namespace {
+
+Application* gApplicationInstance = nullptr;
+
+void onIosMemoryWarning() {
+    if (gApplicationInstance && gApplicationInstance->getAssetManager()) {
+        gApplicationInstance->getAssetManager()->clearCache();
+        LOG_INFO("iOS memory warning: cleared asset cache");
+    }
+}
+
+static bool onLowMemoryEvent(void* /*userdata*/, SDL_Event* event) {
+    if (event && event->type == SDL_EVENT_LOW_MEMORY) {
+        onIosMemoryWarning();
+    }
+    return true;
+}
 
 std::optional<float> movingEntityFloor(rendering::Renderer* renderer,
                                         const glm::vec3& renderPos,
@@ -243,11 +262,13 @@ Application* Application::instance = nullptr;
 
 Application::Application() {
     instance = this;
+    gApplicationInstance = this;
 }
 
 Application::~Application() {
     shutdown();
     instance = nullptr;
+    gApplicationInstance = nullptr;
 }
 
 bool Application::initialize() {
@@ -351,6 +372,14 @@ bool Application::initialize() {
 
     // Create asset manager
     assetManager = std::make_unique<pipeline::AssetManager>();
+
+    // Low-memory handling: drop caches when the OS (or SDL) signals memory
+    // pressure.  SDL_EVENT_LOW_MEMORY is delivered through an event watch
+    // because it can arrive on a non-main thread on some platforms.
+    SDL_AddEventWatch(onLowMemoryEvent, nullptr);
+#if defined(WOWEE_IOS)
+    core::iosSetMemoryWarningCallback(onIosMemoryWarning);
+#endif
 
     // Populate game services - all subsystems now available
     gameServices_.renderer = renderer.get();
