@@ -1647,6 +1647,7 @@ endif()
 # Install targets
 install(TARGETS wowee
     RUNTIME DESTINATION bin
+    BUNDLE DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
@@ -1861,7 +1862,8 @@ if(STORMLIB_LIBRARY AND STORMLIB_INCLUDE_DIR)
     set_target_properties(asset_extract PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     )
-    install(TARGETS asset_extract RUNTIME DESTINATION bin)
+    install(TARGETS asset_extract RUNTIME DESTINATION bin
+    BUNDLE DESTINATION bin)
     message(STATUS "  asset_extract tool: ENABLED")
 else()
     message(STATUS "  asset_extract tool: DISABLED (requires StormLib)")
@@ -1968,7 +1970,8 @@ if(STORMLIB_LIBRARY AND STORMLIB_INCLUDE_DIR AND SDL3_FOUND AND EXISTS ${IMGUI_D
     set_target_properties(wowee_assets PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     )
-    install(TARGETS wowee_assets RUNTIME DESTINATION bin)
+    install(TARGETS wowee_assets RUNTIME DESTINATION bin
+    BUNDLE DESTINATION bin)
     message(STATUS "  wowee_assets window: ENABLED")
 else()
     message(STATUS "  wowee_assets window: DISABLED (needs StormLib, SDL3 and extern/imgui)")
@@ -2049,7 +2052,8 @@ target_link_libraries(dbc_to_csv PRIVATE Threads::Threads)
 set_target_properties(dbc_to_csv PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
-install(TARGETS dbc_to_csv RUNTIME DESTINATION bin)
+install(TARGETS dbc_to_csv RUNTIME DESTINATION bin
+    BUNDLE DESTINATION bin)
 
 # ---- Tool: auth_probe (LOGON_CHALLENGE probe) ----
 add_executable(auth_probe
@@ -2070,7 +2074,8 @@ target_link_libraries(auth_probe PRIVATE Threads::Threads OpenSSL::Crypto
 set_target_properties(auth_probe PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
-install(TARGETS auth_probe RUNTIME DESTINATION bin)
+install(TARGETS auth_probe RUNTIME DESTINATION bin
+    BUNDLE DESTINATION bin)
 
 # ---- Tool: auth_login_probe (challenge + proof probe) ----
 add_executable(auth_login_probe
@@ -2094,7 +2099,8 @@ target_link_libraries(auth_login_probe PRIVATE Threads::Threads OpenSSL::Crypto
 set_target_properties(auth_login_probe PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
-install(TARGETS auth_login_probe RUNTIME DESTINATION bin)
+install(TARGETS auth_login_probe RUNTIME DESTINATION bin
+    BUNDLE DESTINATION bin)
 
 # ---- Tool: blp_convert (BLP ↔ PNG) ----
 add_executable(blp_convert
@@ -2111,7 +2117,8 @@ target_link_libraries(blp_convert PRIVATE Threads::Threads)
 set_target_properties(blp_convert PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
-install(TARGETS blp_convert RUNTIME DESTINATION bin)
+install(TARGETS blp_convert RUNTIME DESTINATION bin
+    BUNDLE DESTINATION bin)
 
 # ---- Tool: wowee_editor (Standalone World Editor) ----
 # Off the default build: it is a large standalone tool that compiles on every
@@ -2645,7 +2652,8 @@ set_target_properties(wowee_editor PROPERTIES
 if(WOWEE_BUILD_EDITOR)
     # Only installable when it is part of the default build - installing a
     # target excluded from ALL fails at install time on a missing binary.
-    install(TARGETS wowee_editor RUNTIME DESTINATION bin)
+    install(TARGETS wowee_editor RUNTIME DESTINATION bin
+    BUNDLE DESTINATION bin)
     message(STATUS "  wowee_editor tool: ENABLED (in default build)")
 else()
     message(STATUS "  wowee_editor tool: on demand only (--target wowee_editor)")
