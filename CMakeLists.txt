@@ -1281,6 +1281,22 @@ endif()
 # from a macOS one (both define __APPLE__).
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     target_compile_definitions(wowee PRIVATE WOWEE_IOS=1)
+    # Xcode's default iOS warning flags include -Wshorten-64-to-32, which is
+    # not part of the desktop/macOS build and would turn every size()-to-uint32
+    # conversion into an error under -Werror.  Silence it for the iOS target.
+    target_compile_options(wowee PRIVATE -Wno-shorten-64-to-32)
+    # miniaudio's iOS backend pulls in AVFoundation, an Objective-C framework;
+    # compile the audio TU as Objective-C++ so its headers parse.
+    set_source_files_properties(src/audio/audio_engine.cpp PROPERTIES LANGUAGE OBJCXX)
+    # On iOS the executable must live inside an app bundle, and Xcode requires
+    # a bundle identifier for any bundle target.  Keep the bundle minimal here
+    # (Phase 1 verification); the full Xcode app shell (Phase 2) replaces it.
+    set_target_properties(wowee PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_IDENTIFIER "com.wowee.client"
+        MACOSX_BUNDLE_BUNDLE_NAME "WoWee"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/ios/Info.plist"
+    )
 endif()
 # macOS cross-compilation: MoltenVK is not available at link time.
 # Allow unresolved Vulkan symbols - resolved at runtime. Scoped to wowee only.
