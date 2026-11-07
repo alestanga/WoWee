@@ -20,7 +20,3 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-```
-
-Now commit. Let me also check .gitignore for build dirs (not needed). Commit.<|end|><|start|>startup to=shell<|channel|>analysis <|constrain|>xml<|message|><rfl:parameter name="command">
-cd /home/stangal01/WoWee && git add -A && git status --short | head -40
