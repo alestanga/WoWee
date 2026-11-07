@@ -1288,6 +1288,20 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     # miniaudio's iOS backend pulls in AVFoundation, an Objective-C framework;
     # compile the audio TU as Objective-C++ so its headers parse.
     set_source_files_properties(src/audio/audio_engine.cpp PROPERTIES LANGUAGE OBJCXX)
+
+    # Link MoltenVK (static) when available, so Vulkan symbols resolve at
+    # link time instead of via dynamic_lookup at runtime.  The framework lives
+    # under extern/MoltenVK (downloaded separately; see tools/build-ios-deps.sh).
+    set(_MV_XCFW "${CMAKE_CURRENT_SOURCE_DIR}/extern/MoltenVK/MoltenVK/MoltenVK/static/MoltenVK.xcframework")
+    if(EXISTS "${_MV_XCFW}/ios-arm64/libMoltenVK.a")
+        target_link_libraries(wowee PRIVATE "${_MV_XCFW}/ios-arm64/libMoltenVK.a")
+        target_link_libraries(wowee PRIVATE
+            "-framework Metal" "-framework Foundation" "-framework QuartzCore"
+            "-framework CoreGraphics" "-framework IOSurface" "-framework UIKit")
+        message(STATUS "MoltenVK (static) linked for iOS")
+    else()
+        message(STATUS "MoltenVK not found at ${_MV_XCFW}; building with dynamic_lookup (runtime link required)")
+    endif()
     # On iOS the executable must live inside an app bundle, and Xcode requires
     # a bundle identifier for any bundle target.  Keep the bundle minimal here
     # (Phase 1 verification); the full Xcode app shell (Phase 2) replaces it.
