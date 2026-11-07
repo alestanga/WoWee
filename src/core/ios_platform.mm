@@ -11,10 +11,33 @@
 namespace wowee {
 namespace core {
 
+namespace {
+void (*gMemoryWarningCallback)() = nullptr;
+}
+
 void iosPreparePlatform() {
 #if defined(__APPLE__)
     @autoreleasepool {
-        // Placeholder for iOS-specific setup (status bar, safe areas, keyboard).
+        // Keep the screen awake while the client runs; a WoW session is long
+        // and an auto-lock mid-pull is worse than a drained battery.
+        [UIApplication sharedApplication].idleTimerDisabled = YES;
+
+        // Hide the status bar on iPad/iPhone; the client is fullscreen.
+        // Status bar visibility is owned by SDL's UIKit view controller
+        // (prefersStatusBarHidden).  Nothing to do here beyond keeping the
+        // screen awake, which is handled above.
+
+        // Forward OS memory warnings to the registered callback.  SDL also
+        // posts SDL_EVENT_LOW_MEMORY, but this guarantees the handler runs
+        // even if the event queue is busy.
+        [[NSNotificationCenter defaultCenter]
+            addObserverForName:UIApplicationDidReceiveMemoryWarningNotification
+                        object:nil
+                         queue:[NSOperationQueue mainQueue]
+                    usingBlock:^(NSNotification* /*note*/) {
+                        if (gMemoryWarningCallback) gMemoryWarningCallback();
+                    }];
+
         LOG_INFO("iOS platform prepared");
     }
 #endif
@@ -43,6 +66,12 @@ void iosSetupDataPaths() {
 
         LOG_INFO("iOS data root: ", docs.UTF8String);
     }
+#endif
+}
+
+void iosSetMemoryWarningCallback(void (*callback)()) {
+#if defined(__APPLE__)
+    gMemoryWarningCallback = callback;
 #endif
 }
 
