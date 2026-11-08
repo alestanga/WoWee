@@ -107,7 +107,14 @@ void iosShowAlert(const char* title, const char* message) {
                     }
                 }
             }
-            if (!keyWindow) keyWindow = [UIApplication sharedApplication].windows.firstObject;
+            if (!keyWindow) {
+                for (UIScene* scene in [UIApplication sharedApplication].connectedScenes) {
+                    if ([scene isKindOfClass:[UIWindowScene class]]) {
+                        NSArray<UIWindow*>* ws = ((UIWindowScene*)scene).windows;
+                        if (ws.count > 0) { keyWindow = ws.firstObject; break; }
+                    }
+                }
+            }
             UIViewController* root = keyWindow.rootViewController;
             if (root) [root presentViewController:alert animated:YES completion:nil];
         });
