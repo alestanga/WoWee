@@ -50,8 +50,8 @@ void iosSetupDataPaths() {
         NSString* docs = paths.firstObject;
         if (!docs) return;
 
-        // Keep config and any unpacked resources under Documents so they survive
-        // and are reachable through file sharing.
+        // Keep config and game data under Documents so they survive and are
+        // reachable through file sharing.
         NSString* data = [docs stringByAppendingPathComponent:@"Data"];
         NSString* config = [docs stringByAppendingPathComponent:@"config"];
 
@@ -60,11 +60,18 @@ void iosSetupDataPaths() {
         [[NSFileManager defaultManager] createDirectoryAtPath:config
             withIntermediateDirectories:YES attributes:nil error:nil];
 
-        setenv("WOWEE_RESOURCE_ROOT", docs.UTF8String, 1);
+        // Shipped assets (shaders, textures, interface) live in the app bundle's
+        // Resources directory, not in Documents.  Point the resource root there
+        // so enterResourceRoot() lands on assets/ and shaders resolve.
+        NSString* resources = [[NSBundle mainBundle] resourcePath];
+        if (resources) {
+            setenv("WOWEE_RESOURCE_ROOT", resources.UTF8String, 1);
+        }
         setenv("WOW_DATA_PATH", data.UTF8String, 1);
         setenv("WOWEE_CONFIG_ROOT", config.UTF8String, 1);
 
         LOG_INFO("iOS data root: ", docs.UTF8String);
+        LOG_INFO("iOS resource root: ", resources ? resources.UTF8String : "(null)");
     }
 #endif
 }
