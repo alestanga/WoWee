@@ -93,7 +93,22 @@ void iosShowAlert(const char* title, const char* message) {
             [alert addAction:[UIAlertAction actionWithTitle:@"OK"
                                                      style:UIAlertActionStyleDefault
                                                    handler:nil]];
-            UIViewController* root = [UIApplication sharedApplication].keyWindow.rootViewController;
+            UIWindow* keyWindow = nil;
+            if (@available(iOS 13.0, *)) {
+                for (UIScene* scene in [UIApplication sharedApplication].connectedScenes) {
+                    if ([scene isKindOfClass:[UIWindowScene class]] && scene.activationState == UISceneActivationStateForegroundActive) {
+                        for (UIWindow* w in ((UIWindowScene*)scene).windows) {
+                            if (w.isKeyWindow) { keyWindow = w; break; }
+                        }
+                        if (!keyWindow && ((UIWindowScene*)scene).windows.count > 0) {
+                            keyWindow = ((UIWindowScene*)scene).windows.firstObject;
+                        }
+                        if (keyWindow) break;
+                    }
+                }
+            }
+            if (!keyWindow) keyWindow = [UIApplication sharedApplication].windows.firstObject;
+            UIViewController* root = keyWindow.rootViewController;
             if (root) [root presentViewController:alert animated:YES completion:nil];
         });
     }
