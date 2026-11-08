@@ -82,5 +82,23 @@ void iosSetMemoryWarningCallback(void (*callback)()) {
 #endif
 }
 
+void iosShowAlert(const char* title, const char* message) {
+#if defined(__APPLE__)
+    @autoreleasepool {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIAlertController* alert = [UIAlertController
+                alertControllerWithTitle:(title ? [NSString stringWithUTF8String:title] : @"WoWee")
+                               message:(message ? [NSString stringWithUTF8String:message] : @"")
+                        preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"OK"
+                                                     style:UIAlertActionStyleDefault
+                                                   handler:nil]];
+            UIViewController* root = [UIApplication sharedApplication].keyWindow.rootViewController;
+            if (root) [root presentViewController:alert animated:YES completion:nil];
+        });
+    }
+#endif
+}
+
 } // namespace core
 } // namespace wowee

@@ -17,5 +17,9 @@ void iosSetupDataPaths();
 // system terminates it.  Pass nullptr to clear.
 void iosSetMemoryWarningCallback(void (*callback)());
 
+// Show a native alert dialog.  Used to surface missing-data warnings on
+// iOS, where the client's ImGui UI may not be available yet.
+void iosShowAlert(const char* title, const char* message);
+
 } // namespace core
 } // namespace wowee
