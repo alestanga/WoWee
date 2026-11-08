@@ -1684,6 +1684,15 @@ if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
             $<TARGET_FILE_DIR:wowee>/Data
         COMMENT "Symlinking Data to $<TARGET_FILE_DIR:wowee>/Data"
     )
+elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # Bundle the small client-side Data/ (expansion profiles + opcode tables)
+    # directly; absolute symlinks are forbidden in app bundles.
+    add_custom_command(TARGET wowee POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/Data
+            $<TARGET_FILE_DIR:wowee>/Data
+        COMMENT "Copying Data into iOS bundle"
+    )
 endif()
 
 # On Windows, SDL 2.28+ uses LoadLibraryExW with LOAD_LIBRARY_SEARCH_DEFAULT_DIRS
