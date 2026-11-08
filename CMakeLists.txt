@@ -1281,6 +1281,9 @@ endif()
 # from a macOS one (both define __APPLE__).
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     target_compile_definitions(wowee PRIVATE WOWEE_IOS=1)
+    set_target_properties(wowee PROPERTIES
+        XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+    )
     # Xcode's default iOS warning flags include -Wshorten-64-to-32, which is
     # not part of the desktop/macOS build and would turn every size()-to-uint32
     # conversion into an error under -Werror.  Silence it for the iOS target.
@@ -1674,7 +1677,7 @@ add_custom_command(TARGET wowee POST_BUILD
 
 # Symlink Data/ next to the executable so expansion profiles, opcode tables,
 # and other runtime data files are found when running from the build directory.
-if(NOT WIN32)
+if(NOT WIN32 AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
     add_custom_command(TARGET wowee POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E create_symlink
             ${CMAKE_CURRENT_SOURCE_DIR}/Data
