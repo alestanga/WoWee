@@ -1226,22 +1226,7 @@ void VkContext::savePipelineCache() {
 /// caller is no worse off than before.
 /// Returns true when it asked for a transform the surface is not already using,
 /// which makes VK_SUBOPTIMAL_KHR the permanent answer from then on.
-static bool requestIdentityTransform(vkb::SwapchainBuilder& builder,
-                                     VkPhysicalDevice physicalDevice,
-                                     VkSurfaceKHR surface) {
-    VkSurfaceCapabilitiesKHR caps{};
-    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &caps) != VK_SUCCESS) {
-        return false;
-    }
-    if (caps.currentTransform == VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) return false;
-    if (!(caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)) {
-        LOG_WARNING("Surface reports transform 0x", std::hex, caps.currentTransform, std::dec,
-                    " and cannot present unrotated; the image will be rotated");
-        return false;
-    }
-    builder.set_pre_transform_flags(VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR);
-    return true;
-}
+
 
 bool VkContext::createSwapchain(int width, int height) {
     vkb::SwapchainBuilder swapchainBuilder{physicalDevice, device, surface};
@@ -1253,7 +1238,16 @@ bool VkContext::createSwapchain(int width, int height) {
         .set_desired_min_image_count(2)
         .set_old_swapchain(swapchain);
 
-    presentsOffNativeTransform_ = requestIdentityTransform(builder, physicalDevice, surface);
+    // On iOS, request the identity transform so we render into the window's
+    // actual orientation rather than the device's native portrait space.
+    // (MoltenVK otherwise reports a portrait extent for a landscape window.)
+    VkSurfaceCapabilitiesKHR _caps{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &_caps) == VK_SUCCESS) {
+        LOG_WARNING("iOS surface: currentExtent=", _caps.currentExtent.width, "x", _caps.currentExtent.height,
+                    " currentTransform=0x", std::hex, _caps.currentTransform, std::dec,
+                    " supportedTransforms=0x", std::hex, _caps.supportedTransforms, std::dec);
+    }
+    presentsOffNativeTransform_ = false;
 
     if (vsync_) {
         builder.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR);
@@ -2646,7 +2640,16 @@ bool VkContext::recreateSwapchain(int width, int height) {
         .set_desired_min_image_count(2)
         .set_old_swapchain(oldSwapchain);
 
-    presentsOffNativeTransform_ = requestIdentityTransform(builder, physicalDevice, surface);
+    // On iOS, request the identity transform so we render into the window's
+    // actual orientation rather than the device's native portrait space.
+    // (MoltenVK otherwise reports a portrait extent for a landscape window.)
+    VkSurfaceCapabilitiesKHR _caps{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &_caps) == VK_SUCCESS) {
+        LOG_WARNING("iOS surface: currentExtent=", _caps.currentExtent.width, "x", _caps.currentExtent.height,
+                    " currentTransform=0x", std::hex, _caps.currentTransform, std::dec,
+                    " supportedTransforms=0x", std::hex, _caps.supportedTransforms, std::dec);
+    }
+    presentsOffNativeTransform_ = false;
 
     if (vsync_) {
         builder.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR);

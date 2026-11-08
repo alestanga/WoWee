@@ -72,9 +72,13 @@ bool Window::initialize() {
 #endif
 #endif
 
-#if defined(__ANDROID__) || defined(WOWEE_IOS)
+#if defined(__ANDROID__)
     // Force landscape on phones/tablets.
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#elif defined(WOWEE_IOS)
+    // Portrait on iOS for now: the Vulkan surface reports native (portrait)
+    // dimensions, and a landscape swapchain is presented rotated/black.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
 #endif
 
     // Initialize SDL
