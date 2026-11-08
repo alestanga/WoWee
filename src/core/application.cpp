@@ -436,6 +436,9 @@ bool Application::initialize() {
         }
     } else {
         LOG_WARNING(assetInventory_.troubleText());
+#if defined(WOWEE_IOS)
+        core::iosShowAlert("WoWee", assetInventory_.troubleText().c_str());
+#endif
 #ifdef WOWEE_HAVE_ASSET_PANEL
         // Assigned rather than set through setState: several of the
         // subsystems its entry actions touch do not exist yet this early,
