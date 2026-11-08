@@ -1,6 +1,7 @@
 #include "core/application.hpp"
 #if defined(WOWEE_IOS)
 #include "core/ios_platform.hpp"
+#include <TargetConditionals.h>
 #endif
 #include "core/frame_pacer.hpp"
 #include "core/env_flag.hpp"
@@ -333,8 +334,12 @@ bool Application::initialize() {
 
     // Create and initialize audio coordinator (owns all audio managers)
     audioCoordinator_ = std::make_unique<audio::AudioCoordinator>();
+#if defined(__APPLE__) && TARGET_OS_SIMULATOR
+    LOG_WARNING("Skipping audio coordinator on iOS simulator (audio subsystem unavailable)");
+#else
     if (!audioCoordinator_->initialize())
         LOG_WARNING("Audio coordinator initialization failed - game will run without audio");
+#endif
     renderer->setAudioCoordinator(audioCoordinator_.get());
 
     // Create UI manager
