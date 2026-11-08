@@ -386,7 +386,11 @@ bool VkContext::createInstance([[maybe_unused]] SDL_Window* window) {
     const char* const* sdlExtNames = SDL_Vulkan_GetInstanceExtensions(&sdlExtCount);
     std::vector<const char*> sdlExts(sdlExtNames, sdlExtNames + sdlExtCount);
 
+#if defined(WOWEE_IOS)
+    vkb::InstanceBuilder builder(vkGetInstanceProcAddr);
+#else
     vkb::InstanceBuilder builder;
+#endif
     builder.set_app_name("Wowee")
            .set_app_version(VK_MAKE_VERSION(1, 0, 0))
            // 1.3, which is what synchronization2 and dynamic rendering are
