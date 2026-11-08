@@ -9,7 +9,6 @@
     "openssl",
     "glm",
     "zlib",
-    "ffmpeg",
     "vulkan-headers"
   ]
 }
