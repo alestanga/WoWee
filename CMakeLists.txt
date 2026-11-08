@@ -1314,6 +1314,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         )
     endif()
 
+    # Force-load Objective-C classes from statically linked libraries (SDL3,
+    # MoltenVK) so UIKit can find SDLUIKitSceneDelegate etc. at runtime.
+    target_link_options(wowee PRIVATE "-ObjC")
+
     # Link MoltenVK (static) when available, so Vulkan symbols resolve at
     # link time instead of via dynamic_lookup at runtime.  The framework lives
     # under extern/MoltenVK (downloaded separately; see tools/build-ios-deps.sh).
