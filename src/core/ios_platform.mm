@@ -6,6 +6,16 @@
 #if defined(__APPLE__)
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+
+// Forward-declare SDL's scene delegate so we can force the linker to pull it
+// out of the static SDL3 library.  Without this, UIKit cannot find the class
+// named in Info.plist's UISceneDelegateClassName and the app gets no scene.
+@interface SDLUIKitSceneDelegate : NSObject <UISceneDelegate>
++ (NSString *)getSceneDelegateClassName;
+@end
+
+// Reference the class so the linker keeps SDLUIKitSceneDelegate in the binary.
+__attribute__((used)) static Class _wowee_force_sdl_scene_delegate = [SDLUIKitSceneDelegate class];
 #endif
 
 namespace wowee {
