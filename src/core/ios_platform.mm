@@ -21,28 +21,8 @@ char** gIosArgv = nullptr;
 @implementation WoWeeSceneDelegate
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
     if (![scene isKindOfClass:[UIWindowScene class]]) return;
-    UIWindowScene *windowScene = (UIWindowScene *)scene;
 
     NSBundle *bundle = [NSBundle mainBundle];
-    UIViewController *vc = nil;
-    NSString *screenname = [bundle objectForInfoDictionaryKey:@"UILaunchStoryboardName"];
-    if (screenname) {
-        @try {
-            UIStoryboard *storyboard = [UIStoryboard storyboardWithName:screenname bundle:bundle];
-            vc = [storyboard instantiateInitialViewController];
-        } @catch (NSException *exception) {
-            vc = nil;
-        }
-    }
-    if (vc) {
-        CGRect viewFrame = windowScene.coordinateSpace.bounds;
-        UIWindow *launchWindow = [[UIWindow alloc] initWithWindowScene:windowScene];
-        launchWindow.frame = viewFrame;
-        launchWindow.windowLevel = UIWindowLevelNormal + 1.0;
-        launchWindow.hidden = NO;
-        launchWindow.rootViewController = vc;
-    }
-
     [[NSFileManager defaultManager] changeCurrentDirectoryPath:[bundle resourcePath]];
 
     dispatch_async(dispatch_get_main_queue(), ^{
