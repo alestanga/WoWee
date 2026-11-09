@@ -219,6 +219,10 @@ bool Window::initialize() {
     core::iosLogSdlWindow(window);
     // What is on screen right now, and (via a delayed sample) once settled.
     core::iosLogWindowStatus("after scene attach");
+    LOG_INFO("iOS window: ", width, "x", height, " points, drawable ",
+             drawableWidth, "x", drawableHeight);
+    if (const char* r = std::getenv("WOWEE_RESOURCE_ROOT")) LOG_INFO("iOS resource root: ", r);
+    if (const char* d = std::getenv("WOW_DATA_PATH")) LOG_INFO("iOS data path: ", d);
 #endif
 
     // Initialize Vulkan context
