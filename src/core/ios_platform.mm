@@ -46,10 +46,9 @@ char** gIosArgv = nullptr;
         launchWindow.rootViewController = vc;
     }
 
-    dispatch_async(dispatch_get_main_queue(), ^{
-        SDL_SetMainReady();
-        SDL_main(gIosArgc, gIosArgv);
-    });
+    // Do NOT call SDL_main here.  SDL's app delegate (didFinishLaunchingWithOptions)
+    // schedules postFinishLaunch -> SDL_main.  Calling it here too would run the
+    // main loop twice and corrupt state.
 }
 @end
 #endif
