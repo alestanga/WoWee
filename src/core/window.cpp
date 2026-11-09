@@ -209,6 +209,10 @@ bool Window::initialize() {
                     drawableWidth, "x", drawableHeight,
                     " pixel surface - the world is drawn at the pixel size.");
     }
+#if defined(WOWEE_IOS)
+    // What is on screen right now, and (via a delayed sample) once settled.
+    core::iosLogWindowStatus("after window create");
+#endif
 
     // Initialize Vulkan context
     vkContext = std::make_unique<rendering::VkContext>();
