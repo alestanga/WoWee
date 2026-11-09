@@ -1314,14 +1314,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         )
     endif()
 
-    # Force-load Objective-C classes from statically linked libraries (SDL3,
-    # MoltenVK) so UIKit can find SDLUIKitSceneDelegate etc. at runtime.
+    # Force-load Objective-C classes from statically linked libraries so the
+    # runtime can resolve classes referenced by Info.plist (e.g. scene delegates).
     target_link_options(wowee PRIVATE "-ObjC")
-    if(EXISTS "${CMAKE_BINARY_DIR}/lib/Debug/libSDL3.a")
-        target_link_options(wowee PRIVATE "-Wl,-force_load,${CMAKE_BINARY_DIR}/lib/Debug/libSDL3.a")
-    elseif(EXISTS "${CMAKE_BINARY_DIR}/lib/libSDL3.a")
-        target_link_options(wowee PRIVATE "-Wl,-force_load,${CMAKE_BINARY_DIR}/lib/libSDL3.a")
-    endif()
 
     # Link MoltenVK (static) when available, so Vulkan symbols resolve at
     # link time instead of via dynamic_lookup at runtime.  The framework lives

@@ -10,6 +10,10 @@
 extern "C" int SDL_main(int argc, char* argv[]);
 extern "C" void SDL_SetMainReady(void);
 
+// Globals for argc/argv, accessible from the scene delegate.
+int gIosArgc = 0;
+char** gIosArgv = nullptr;
+
 // Custom scene delegate in the main binary, so UIKit can always find it.
 @interface WoWeeSceneDelegate : UIResponder <UISceneDelegate>
 @end
@@ -43,7 +47,7 @@ extern "C" void SDL_SetMainReady(void);
 
     dispatch_async(dispatch_get_main_queue(), ^{
         SDL_SetMainReady();
-        SDL_main(gArgc, gArgv);
+        SDL_main(gIosArgc, gIosArgv);
     });
 }
 @end
@@ -54,8 +58,6 @@ namespace core {
 
 namespace {
 void (*gMemoryWarningCallback)() = nullptr;
-int gArgc = 0;
-char** gArgv = nullptr;
 }
 
 void iosPreparePlatform() {
@@ -112,8 +114,8 @@ void iosSetMemoryWarningCallback(void (*callback)()) {
 
 void iosStoreArgs(int argc, char** argv) {
 #if defined(__APPLE__)
-    gArgc = argc;
-    gArgv = argv;
+    gIosArgc = argc;
+    gIosArgv = argv;
 #endif
 }
 
