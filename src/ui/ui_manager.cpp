@@ -447,6 +447,21 @@ void UIManager::update([[maybe_unused]] float deltaTime) {
     // Start ImGui frame
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
+    // Guard against a zero framebuffer scale on platforms where
+    // SDL_GetWindowDisplayScale() returns 0 (seen on iOS).
+    ImGuiIO& _io = ImGui::GetIO();
+    if (_io.DisplayFramebufferScale.x <= 0.0f || _io.DisplayFramebufferScale.y <= 0.0f) {
+        if (_io.DisplaySize.x > 0.0f && _io.DisplaySize.y > 0.0f) {
+            int _dw = 0, _dh = 0;
+            SDL_GetWindowSizeInPixels(window->getSDLWindow(), &_dw, &_dh);
+            _io.DisplayFramebufferScale.x = (_dw > 0) ? (float)_dw / _io.DisplaySize.x : 1.0f;
+            _io.DisplayFramebufferScale.y = (_dh > 0) ? (float)_dh / _io.DisplaySize.y : 1.0f;
+        } else {
+            _io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+        }
+        if (_io.DisplayFramebufferScale.x <= 0.0f) _io.DisplayFramebufferScale.x = 1.0f;
+        if (_io.DisplayFramebufferScale.y <= 0.0f) _io.DisplayFramebufferScale.y = 1.0f;
+    }
     ImGui::NewFrame();
 }
 
