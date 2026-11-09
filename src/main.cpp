@@ -134,6 +134,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char* argv[]) {
 #if defined(WOWEE_IOS)
     // Point the client at the app's Documents directory (file-sharing
     // accessible) before anything opens a file.
+    wowee::core::iosStoreArgs(argc, argv);
     wowee::core::iosSetupDataPaths();
 #endif
 #if defined(__ANDROID__) || defined(WOWEE_IOS)

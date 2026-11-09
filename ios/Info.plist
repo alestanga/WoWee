@@ -50,7 +50,7 @@
                     <key>UISceneConfigurationName</key>
                     <string>Default Configuration</string>
                     <key>UISceneDelegateClassName</key>
-                    <string>SDLUIKitSceneDelegate</string>
+                    <string>WoWeeSceneDelegate</string>
                 </dict>
             </array>
         </dict>
