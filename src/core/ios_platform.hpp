@@ -21,5 +21,11 @@ void iosSetMemoryWarningCallback(void (*callback)());
 // iOS, where the client's ImGui UI may not be available yet.
 void iosShowAlert(const char* title, const char* message);
 
+// Store argc/argv from main() so the scene delegate can invoke SDL_main.
+void iosStoreArgs(int argc, char** argv);
+
+// Minimal scene delegate class name for Info.plist.
+extern const char* iosSceneDelegateClassName();
+
 } // namespace core
 } // namespace wowee
