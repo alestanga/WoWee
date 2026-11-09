@@ -7,8 +7,16 @@ BRANCH="${1:-ipados}"
 
 cd "$(git rev-parse --show-toplevel)"
 
-echo "Fetching upstream..."
+echo "Fetching upstream and origin..."
 git fetch upstream
+git fetch origin
+
+# Guard: never overwrite work that exists on origin but not locally.
+if ! git merge-base --is-ancestor origin/"$BRANCH" "$BRANCH" 2>/dev/null; then
+    echo "ERROR: origin/$BRANCH has commits not in local $BRANCH."
+    echo "       Pull them first (git merge origin/$BRANCH) before syncing."
+    exit 1
+fi
 
 echo "Updating master..."
 git checkout master
