@@ -1283,6 +1283,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     target_compile_definitions(wowee PRIVATE WOWEE_IOS=1)
     set_target_properties(wowee PROPERTIES
         XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Automatic"
+        # Build for iPhone and iPad.  Without this Xcode defaults to
+        # iPhone-only (UIDeviceFamily=1) and an iPad runs the app in
+        # compatibility mode: a 375x667-point virtual iPhone screen instead
+        # of a native iPad window.
+        XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
     )
     # Xcode's default iOS warning flags include -Wshorten-64-to-32, which is
     # not part of the desktop/macOS build and would turn every size()-to-uint32

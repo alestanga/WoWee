@@ -17,6 +17,12 @@ void iosSetupDataPaths();
 // system terminates it.  Pass nullptr to clear.
 void iosSetMemoryWarningCallback(void (*callback)());
 
+// Log every UIWindow in the active scene (class, frame, hidden, level,
+// key state, root view controller) plus a follow-up sample 3s later.
+// Diagnostic for black-screen bugs: shows whether something is covering
+// the SDL window or the window never became visible.
+void iosLogWindowStatus(const char* stage);
+
 // Show a native alert dialog.  Used to surface missing-data warnings on
 // iOS, where the client's ImGui UI may not be available yet.
 void iosShowAlert(const char* title, const char* message);
