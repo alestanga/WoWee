@@ -25,30 +25,11 @@ char** gIosArgv = nullptr;
     NSBundle *bundle = [NSBundle mainBundle];
     [[NSFileManager defaultManager] changeCurrentDirectoryPath:[bundle resourcePath]];
 
-    // Create a launch window so the scene is fully connected before SDL_main.
-    UIWindowScene *windowScene = (UIWindowScene *)scene;
-    UIViewController *vc = nil;
-    NSString *screenname = [bundle objectForInfoDictionaryKey:@"UILaunchStoryboardName"];
-    if (screenname) {
-        @try {
-            UIStoryboard *storyboard = [UIStoryboard storyboardWithName:screenname bundle:bundle];
-            vc = [storyboard instantiateInitialViewController];
-        } @catch (NSException *exception) {
-            vc = nil;
-        }
-    }
-    if (vc) {
-        CGRect viewFrame = windowScene.coordinateSpace.bounds;
-        UIWindow *launchWindow = [[UIWindow alloc] initWithWindowScene:windowScene];
-        launchWindow.frame = viewFrame;
-        launchWindow.windowLevel = UIWindowLevelNormal + 1.0;
-        launchWindow.hidden = NO;
-        launchWindow.rootViewController = vc;
-    }
-
-    // Do NOT call SDL_main here.  SDL's app delegate (didFinishLaunchingWithOptions)
-    // schedules postFinishLaunch -> SDL_main.  Calling it here too would run the
-    // main loop twice and corrupt state.
+    // Do NOT create a launch window or call SDL_main here.  SDL's app
+    // delegate (didFinishLaunchingWithOptions) handles both: it creates
+    // the launch window and schedules postFinishLaunch -> SDL_main.  Doing
+    // it here too caused a second (stuck) launch window and a blocked
+    // main thread.
 }
 @end
 #endif
