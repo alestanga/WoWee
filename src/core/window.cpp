@@ -76,9 +76,11 @@ bool Window::initialize() {
     // Force landscape on phones/tablets.
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #elif defined(WOWEE_IOS)
-    // Portrait on iOS for now: the Vulkan surface reports native (portrait)
-    // dimensions, and a landscape swapchain is presented rotated/black.
-    SDL_SetHint(SDL_HINT_ORIENTATIONS, "Portrait");
+    // Landscape, like a notebook.  Portrait used to be forced here because
+    // a landscape window presented black - but that was the missing-scene
+    // bug (the window was never displayed at all), not an orientation
+    // problem.  Info.plist agrees: landscape-only, no portrait.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
 
     // Initialize SDL
@@ -210,8 +212,13 @@ bool Window::initialize() {
                     " pixel surface - the world is drawn at the pixel size.");
     }
 #if defined(WOWEE_IOS)
+    // SDL 3.2.24 creates its UIWindow with initWithFrame: and never gives
+    // it a scene; a scene-based app never displays such a window (black
+    // screen).  Attach it to the connected scene, then show what we got.
+    core::iosAttachWindowToScene(window);
+    core::iosLogSdlWindow(window);
     // What is on screen right now, and (via a delayed sample) once settled.
-    core::iosLogWindowStatus("after window create");
+    core::iosLogWindowStatus("after scene attach");
 #endif
 
     // Initialize Vulkan context
