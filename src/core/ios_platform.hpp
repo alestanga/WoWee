@@ -23,6 +23,21 @@ void iosSetMemoryWarningCallback(void (*callback)());
 // the SDL window or the window never became visible.
 void iosLogWindowStatus(const char* stage);
 
+// First connected UIWindowScene as an opaque pointer (nil if none is
+// connected yet).
+void* iosFirstUiWindowScene();
+
+// SDL 3.2.24 builds its UIWindow with initWithFrame: and never assigns a
+// scene, so in a scene-based app it is never displayed.  Grab the UIWindow
+// from SDL_PROP_WINDOW_UIKIT_WINDOW_POINTER, attach it to the connected
+// UIWindowScene and make it key/visible.
+void iosAttachWindowToScene(void* sdlWindow);
+
+// Log the UIKit window SDL built for the given SDL_Window (read from
+// SDL_PROP_WINDOW_UIKIT_WINDOW_POINTER): pointer, attached scene, frame,
+// hidden/key state, layer parent. Diagnostic for black-screen bugs.
+void iosLogSdlWindow(void* sdlWindow);
+
 // Show a native alert dialog.  Used to surface missing-data warnings on
 // iOS, where the client's ImGui UI may not be available yet.
 void iosShowAlert(const char* title, const char* message);

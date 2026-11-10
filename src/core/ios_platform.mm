@@ -8,6 +8,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #include <SDL3/SDL_system.h>
+#include <SDL3/SDL_video.h>
 
 extern "C" int SDL_main(int argc, char* argv[]);
 extern "C" void SDL_SetMainReady(void);
@@ -221,6 +222,85 @@ void iosLogWindowStatus(const char* stage) {
                              iosLogWindowStatus("t+3s");
                            });
         }
+    }
+#endif
+}
+
+void* iosFirstUiWindowScene() {
+#if defined(__APPLE__)
+    @autoreleasepool {
+        for (UIScene* s in [UIApplication sharedApplication].connectedScenes) {
+            if ([s isKindOfClass:[UIWindowScene class]]) {
+                return (__bridge void*)s;
+            }
+        }
+    }
+#endif
+    return nullptr;
+}
+
+void iosAttachWindowToScene(void* sdlWindow) {
+#if defined(__APPLE__)
+    @autoreleasepool {
+        if (!sdlWindow) {
+            LOG_WARNING("Scene attach: no SDL window");
+            return;
+        }
+        SDL_Window* w = static_cast<SDL_Window*>(sdlWindow);
+        SDL_PropertiesID props = SDL_GetWindowProperties(w);
+        UIWindow* uiw = (__bridge UIWindow*)SDL_GetPointerProperty(
+            props, SDL_PROP_WINDOW_UIKIT_WINDOW_POINTER, nullptr);
+        if (!uiw) {
+            LOG_WARNING("Scene attach: SDL window has no UIKit window");
+            return;
+        }
+        UIWindowScene* scene = nil;
+        for (UIScene* s in [UIApplication sharedApplication].connectedScenes) {
+            if ([s isKindOfClass:[UIWindowScene class]]) {
+                scene = (UIWindowScene*)s;
+                break;
+            }
+        }
+        if (!scene) {
+            LOG_WARNING("Scene attach: no UIWindowScene connected");
+            return;
+        }
+        if (uiw.windowScene != scene) {
+            // SDL 3.2.24 never does this; assigning is what puts the window
+            // into scene.windows, without which iOS never renders it.
+            uiw.windowScene = scene;
+        }
+        [uiw makeKeyAndVisible];
+        LOG_WARNING("Scene attach: uiwindow=", (void*)uiw,
+                    " scene=", (void*)uiw.windowScene,
+                    " hidden=", uiw.hidden ? 1 : 0,
+                    " key=", uiw.isKeyWindow ? 1 : 0,
+                    " frame=", NSStringFromCGRect(uiw.frame));
+    }
+#endif
+}
+
+void iosLogSdlWindow(void* sdlWindow) {
+#if defined(__APPLE__)
+    @autoreleasepool {
+        if (!sdlWindow) {
+            LOG_WARNING("SDL window probe: no SDL window");
+            return;
+        }
+        SDL_Window* w = static_cast<SDL_Window*>(sdlWindow);
+        SDL_PropertiesID props = SDL_GetWindowProperties(w);
+        UIWindow* uiw = (__bridge UIWindow*)SDL_GetPointerProperty(
+            props, SDL_PROP_WINDOW_UIKIT_WINDOW_POINTER, nullptr);
+        if (!uiw) {
+            LOG_WARNING("SDL window probe: SDL has no UIKit window in its properties");
+            return;
+        }
+        LOG_WARNING("SDL window probe: uiwindow=", (void*)uiw,
+                    " scene=", (void*)uiw.windowScene,
+                    " hidden=", uiw.hidden ? 1 : 0,
+                    " key=", uiw.isKeyWindow ? 1 : 0,
+                    " frame=", NSStringFromCGRect(uiw.frame),
+                    " superlayer=", (void*)uiw.layer.superlayer);
     }
 #endif
 }
