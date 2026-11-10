@@ -5,6 +5,7 @@ build-asan/
 build-android/
 build-android-deps/
 build-debug/
+build-ios/
 build-sanitize/
 bin/
 lib/
