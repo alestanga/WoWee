@@ -1691,10 +1691,13 @@ bool Renderer::captureScreenshot(const std::string& outputPath) {
         std::swap(pixels[i * 4 + 0], pixels[i * 4 + 2]); // B ↔ R
     }
 
-    // Ensure output directory exists
+    // Ensure output directory exists. The error_code overload: a screenshot
+    // path that cannot be created must fail the write, not the frame.
     std::filesystem::path outPath(outputPath);
-    if (outPath.has_parent_path())
-        std::filesystem::create_directories(outPath.parent_path());
+    if (outPath.has_parent_path()) {
+        std::error_code ec;
+        std::filesystem::create_directories(outPath.parent_path(), ec);
+    }
 
     int ok = stbi_write_png(outputPath.c_str(),
                             static_cast<int>(w), static_cast<int>(h),

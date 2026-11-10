@@ -1109,6 +1109,11 @@ bool VkContext::createAllocator() {
 // ---------------------------------------------------------------------------
 
 static std::string getPipelineCachePath() {
+    // An explicit config root (iOS sets it to Documents/config) is the one
+    // directory this process knows is writable - $HOME on iOS points outside
+    // the app sandbox, so a cache file put there could never be written.
+    if (const char* root = std::getenv("WOWEE_CONFIG_ROOT"); root && *root)
+        return std::string(root) + "/pipeline_cache.bin";
 #ifdef _WIN32
     if (const char* appdata = std::getenv("APPDATA"))
         return std::string(appdata) + "\\wowee\\pipeline_cache.bin";
@@ -1198,7 +1203,13 @@ void VkContext::savePipelineCache() {
     }
 
     std::string path = getPipelineCachePath();
-    std::filesystem::create_directories(std::filesystem::path(path).parent_path());
+    {
+        // error_code overload: on iOS $HOME is outside the sandbox, so this
+        // would throw out of the VkContext destructor instead of skipping
+        // a cache file that cannot be written anyway.
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
+    }
 
     std::ofstream file(path, std::ios::binary | std::ios::trunc);
     if (!file.is_open()) {
