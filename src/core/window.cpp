@@ -203,6 +203,28 @@ bool Window::initialize() {
 
     setWindowIcon();
 
+    // Whether this platform's window can be resized at all.
+    //
+    // Asked of SDL rather than decided by an #ifdef, because the answer is a
+    // property of the video backend rather than of the platform: SDL's UIKit
+    // backend has no SetWindowSize at all, so the call there is answered by
+    // doing nothing and the window stays the size the system gave it. On
+    // Android it does have one, and the window can be resized.
+    //
+    // Found by asking for the size the window already is: a request that
+    // cannot be honoured is refused, and a request that asks for what is
+    // already true is granted without changing anything.
+    {
+        int currentW = 0, currentH = 0;
+        SDL_GetWindowSize(window, &currentW, &currentH);
+        canResizeWindow_ = SDL_SetWindowSize(window, currentW, currentH);
+        if (!canResizeWindow_) {
+            LOG_INFO("This platform cannot resize the window: a resolution "
+                     "request will change the size the world is drawn at, not "
+                     "the size of the window.");
+        }
+    }
+
     // Before the swapchain, which is sized from it.
     SDL_GetWindowSize(window, &width, &height);
     refreshDrawableSize();
@@ -358,6 +380,21 @@ void Window::refreshDrawableSize() {
 void Window::applyResolution(int w, int h) {
     if (!window) return;
     if (w <= 0 || h <= 0) return;
+
+    // A window that cannot be resized cannot be given a resolution - the
+    // request would be accepted and change nothing, and the player would see
+    // a dropdown that says one thing and does another.
+    //
+    // On such a platform the resolution means the size the world is drawn at
+    // instead, and the upscaler stretches it onto the screen. That is the
+    // only way a resolution selector can mean anything here, and it is what
+    // makes a lower resolution worth choosing at all: fewer pixels drawn,
+    // then scaled up.
+    if (!canResizeWindow_) {
+        setRenderResolution(w, h);
+        return;
+    }
+
     if (fullscreen) {
         const int displayIndex = SDL_GetDisplayForWindow(window);
         if (displayIndex < 0) {
@@ -468,6 +505,24 @@ void Window::applyResolution(int w, int h) {
     if (vkContext) {
         vkContext->markSwapchainDirty();
     }
+}
+
+void Window::setRenderResolution(int w, int h) {
+    if (w <= 0 || h <= 0) return;
+    if (renderResolutionWidth == w && renderResolutionHeight == h) return;
+    renderResolutionWidth = w;
+    renderResolutionHeight = h;
+    // Said out loud, because on this platform nothing about the window
+    // changes and the picture is the only sign that the setting did anything.
+    LOG_WARNING("The world will be drawn at ", w, "x", h, " and scaled up to the ",
+                drawableWidth, "x", drawableHeight, " screen");
+}
+
+void Window::clearRenderResolution() {
+    if (renderResolutionWidth == 0 && renderResolutionHeight == 0) return;
+    renderResolutionWidth = 0;
+    renderResolutionHeight = 0;
+    LOG_WARNING("The world will be drawn at the screen's own size");
 }
 
 } // namespace core

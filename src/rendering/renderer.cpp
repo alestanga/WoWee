@@ -1256,6 +1256,25 @@ void Renderer::beginFrame() {
     // it was, and nothing bounded it.
     if (vkCtx) vkCtx->pollUploadBatches();
 
+    // The size the world is drawn at, which the window knows and the pipeline
+    // does not: on a platform whose window cannot be resized this is the only
+    // thing a resolution request can change.
+    //
+    // Pushed every frame rather than once, because the post-process resources
+    // are remade on a resize - and they are made at the size asked for here,
+    // so the request has to be in place before they are made, or a resize
+    // would quietly throw it away.
+    if (postProcessPipeline_) {
+        const int renderW = window->getRenderResolutionWidth();
+        const int renderH = window->getRenderResolutionHeight();
+        if (renderW > 0 && renderH > 0) {
+            postProcessPipeline_->setRenderTargetSize(
+                static_cast<uint32_t>(renderW), static_cast<uint32_t>(renderH));
+        } else {
+            postProcessPipeline_->clearRenderTargetSize();
+        }
+    }
+
     // Post-process resource management (§4.3 - delegates to PostProcessPipeline)
     if (postProcessPipeline_) postProcessPipeline_->manageResources();
 
@@ -2401,8 +2420,15 @@ void Renderer::setFSR2Enabled(bool enabled) {
         pendingMsaaSamples_ = VK_SAMPLE_COUNT_1_BIT;
     }
 }
-void Renderer::setGrassEnabled(bool enabled) {
-    if (enabled == grassEnabled_) return;
+void Renderer::setRenderTargetSize(uint32_t width, uint32_t height) {
+    if (!postProcessPipeline_) return;
+    postProcessPipeline_->setRenderTargetSize(width, height);
+}
+void Renderer::clearRenderTargetSize() {
+    if (!postProcessPipeline_) return;
+    postProcessPipeline_->clearRenderTargetSize();
+}
+void Renderer::setGrassEnabled(bool enabled) {    if (enabled == grassEnabled_) return;
     grassEnabled_ = enabled;
     if (!enabled && grassRenderer_) {
         // Empty the population rather than just skipping the draw: a blade

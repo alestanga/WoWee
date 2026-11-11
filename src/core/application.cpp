@@ -102,6 +102,7 @@
 #include <set>
 #include <filesystem>
 #include <fstream>
+#include "core/config_paths.hpp"
 
 #include <thread>
 #ifdef __linux__
@@ -1343,9 +1344,34 @@ void Application::run() {
     // CPU 0 and defeated all command-recording parallelism.
 
     frameProfileEnabled_ = core::envFlagEnabled("WOWEE_FRAME_PROFILE", false);
+    // The same flag from the config file, because an app on a device cannot
+    // be given an environment and the per-stage breakdown is the only way to
+    // see where the frame time goes there.
+    if (!frameProfileEnabled_) {
+        std::ifstream profileIn(core::getConfigRoot() + "/settings.cfg");
+        std::string profileLine;
+        while (std::getline(profileIn, profileLine)) {
+            const size_t eq = profileLine.find('=');
+            if (eq == std::string::npos) continue;
+            std::string key = profileLine.substr(0, eq);
+            std::string value = profileLine.substr(eq + 1);
+            const auto trim = [](std::string& s) {
+                const char* ws = " \t\r\n";
+                const size_t b = s.find_first_not_of(ws);
+                const size_t e = s.find_last_not_of(ws);
+                s = (b == std::string::npos) ? "" : s.substr(b, e - b + 1);
+            };
+            trim(key);
+            trim(value);
+            if (key == "frameprofile") {
+                frameProfileEnabled_ = (value == "1" || value == "true");
+                break;
+            }
+        }
+    }
     if (frameProfileEnabled_) {
-        LOG_WARNING("Frame timing profile enabled (WOWEE_FRAME_PROFILE=1) - "
-                    "the per-stage breakdown will be reported at warning");
+        LOG_WARNING("Frame timing profile enabled - the per-stage breakdown will be "
+                    "reported at warning");
     }
 
     // Integer nanoseconds off a monotonic clock, and the finest sleep the

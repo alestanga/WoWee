@@ -74,6 +74,28 @@ public:
     void setVsync(bool enable);
     void applyResolution(int w, int h);
 
+    /// The size the world is drawn at, when the platform cannot resize the
+    /// window and the resolution selector has to mean something else.
+    ///
+    /// Zero on both clears it, and the world is drawn at the swapchain's own
+    /// size - the ordinary case, and the only one a desktop ever sees.
+    ///
+    /// This is not the window's size and does not change it. It is the size
+    /// the world is rendered at before the upscaler stretches it onto the
+    /// screen, so a device whose window cannot be resized can still be asked
+    /// for a lower resolution and pay less for it.
+    void setRenderResolution(int w, int h);
+    void clearRenderResolution();
+    [[nodiscard]] int getRenderResolutionWidth() const { return renderResolutionWidth; }
+    [[nodiscard]] int getRenderResolutionHeight() const { return renderResolutionHeight; }
+    /// Whether the platform can resize the window at all.
+    ///
+    /// False on iOS, where SDL's UIKit backend has no SetWindowSize: the
+    /// window is whatever the system gave the application, and a request to
+    /// change it is answered by doing nothing. The resolution selector is
+    /// routed to the render resolution there instead of being lost.
+    [[nodiscard]] bool canResizeWindow() const { return canResizeWindow_; }
+
     [[nodiscard]] SDL_Window* getSDLWindow() const { return window; }
 
     // Vulkan context access
@@ -94,6 +116,12 @@ private:
     int windowedWidth = 0;
     int windowedHeight = 0;
     bool fullscreen = false;
+    // The size the world is drawn at, when the window cannot be resized.
+    // Zero means the swapchain's own size.
+    int renderResolutionWidth = 0;
+    int renderResolutionHeight = 0;
+    // Whether this platform's window can be resized by the client at all.
+    bool canResizeWindow_ = true;
     int frameCapFps_ = 0;   // 0 = uncapped
     bool vsync = true;
     bool shouldCloseFlag = false;
