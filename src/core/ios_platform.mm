@@ -144,6 +144,24 @@ void iosSetupDataPaths() {
         [[NSFileManager defaultManager] createDirectoryAtPath:config
             withIntermediateDirectories:YES attributes:nil error:nil];
 
+        // The client finds an expansion by scanning Data/expansions/ for a
+        // directory holding an expansion.json, and the tables themselves are
+        // copied into place by syncClientTables once the directory exists.
+        //
+        // So all this has to do is make the directories. Without them the
+        // client's tables have nowhere to go, no expansion is found, and a
+        // game data folder the player copied in is never opened.
+        NSString* bundleData = [[[NSBundle mainBundle] resourcePath]
+            stringByAppendingPathComponent:@"Data"];
+        NSString* bundleExpansions = [bundleData stringByAppendingPathComponent:@"expansions"];
+        NSFileManager* fm = [NSFileManager defaultManager];
+        for (NSString* entry in [fm contentsOfDirectoryAtPath:bundleExpansions error:nil]) {
+            NSString* to = [data stringByAppendingPathComponent:
+                [@"expansions" stringByAppendingPathComponent:entry]];
+            [fm createDirectoryAtPath:to withIntermediateDirectories:YES
+                           attributes:nil error:nil];
+        }
+
         NSString* resources = [[NSBundle mainBundle] resourcePath];
         if (resources) {
             setenv("WOWEE_RESOURCE_ROOT", resources.UTF8String, 1);

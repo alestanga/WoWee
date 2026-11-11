@@ -42,8 +42,12 @@ new abstraction in the core.
    with keyboard + mouse for now.
 5. **App lifecycle / background.** iOS suspends aggressively; need to handle
    `SDL_APP_WILLENTERBACKGROUND` to pause network/render.
-6. **Large data (35 GB).** Same constraint as Android: player copies `Data/`
-   into the app sandbox via File Sharing. Document clearly.
+6. **Large data (35 GB).** Same constraint as Android, and the same answer:
+   `tools/android/make_minimal_data.py` cuts the extraction down to a profile
+   that fits (787 MB for the login screen, 7.5 GB for one continent, 12 GB for
+   every map). The tool is platform-agnostic - it reads `manifest.json` and
+   writes a tree with its own - so the iPad uses it unchanged. The result is
+   copied into `Documents/Data` over USB with Finder. See `ios/README.md`.
 
 ## 4. Work breakdown
 
@@ -58,6 +62,9 @@ new abstraction in the core.
 - Phase 4 (partial): the scene delegate forwards the lifecycle; background
   pause still to do.
 - Phase 5 (pending): TestFlight/App Store packaging, release workflow.
+- Data sizing (done): the extraction is cut down with the existing profile
+  tool, and the app bundle carries only the assets the client reads (the
+  project's own soundtrack and the README screenshots are not in it).
 
 ## 5. GitHub workflow
 
