@@ -42,6 +42,16 @@ void iosLogSdlWindow(void* sdlWindow);
 // iOS, where the client's ImGui UI may not be available yet.
 void iosShowAlert(const char* title, const char* message);
 
+// Present the iOS share sheet for a file the client just wrote (a screenshot
+// or a recording), so the player can send it to Photos, AirDrop, Files or
+// Mail without leaving the app.  No-op off iOS.
+void iosShareFile(const char* path);
+
+// Save a PNG into the device's photo library, so a screenshot taken in game
+// shows up in the Photos app alongside the ones the tablet takes itself.
+// Requires NSPhotoLibraryAddUsageDescription in Info.plist.  No-op off iOS.
+void iosSaveScreenshotToPhotos(const char* path);
+
 // Store argc/argv from main() so the scene delegate can invoke SDL_main.
 void iosStoreArgs(int argc, char** argv);
 

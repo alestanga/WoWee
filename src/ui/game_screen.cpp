@@ -652,6 +652,7 @@ void GameScreen::render(game::GameHandler& gameHandler) {
                 "if f and FCF_SelectDockFrame then FCF_SelectDockFrame(f) end");
         }
         if (cmds.takeScreenshot) takeScreenshot();
+        if (cmds.shareLastCapture) shareLastCapture();
         switch (cmds.recording) {
             case ChatPanel::SlashCommands::Recording::Toggle: toggleRecording(); break;
             case ChatPanel::SlashCommands::Recording::Start:  startRecording();  break;
