@@ -192,6 +192,12 @@ def main():
                              "or 'all' for every map the extraction has")
     parser.add_argument("--copy", action="store_true",
                         help="copy instead of hard linking, for a different filesystem")
+    parser.add_argument("--with-sound", action="store_true",
+                        help="keep the game's sound effects (sound/, about 6 GB). "
+                             "The profiles drop them: the client runs without them "
+                             "(the audio coordinator warns and the game plays on), "
+                             "and the music is the project's own soundtrack, which "
+                             "is not in this tree at all.")
     parser.add_argument("--dry-run", action="store_true", help="report the size and stop")
     args = parser.parse_args()
 
@@ -199,7 +205,12 @@ def main():
     if args.profile not in profiles:
         print("no profile named %r. Known: %s" % (args.profile, ", ".join(sorted(profiles))))
         return 1
-    profile = profiles[args.profile]
+    profile = dict(profiles[args.profile])
+    if args.with_sound and "sound/**" not in profile["include"]:
+        # Added to the profile rather than to the profile file, so the shared
+        # profiles keep the sizes they were measured at and this stays an
+        # opt-in on the command line.
+        profile["include"] = list(profile["include"]) + ["sound/**"]
 
     source = Path(args.source).expanduser().resolve()
     manifest = source / "manifest.json"
