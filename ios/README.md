@@ -52,9 +52,15 @@ uses - it is platform-agnostic, and produces a tree with its own
 `manifest.json` describing exactly what it kept:
 
 ```
-tools/android/make_minimal_data.py --source ~/Data --out ~/Data-ipad \
+tools/android/make_minimal_data.py \
+    --source ~/Library/Application\ Support/Wowee/Data/expansions/wotlk \
+    --out ~/Data-ipad \
     --profile world --maps all
 ```
+
+`--source` is the directory holding `manifest.json`, which for a desktop
+extraction is `Data/expansions/<id>/` - not `Data/`. The tool says so itself
+if it is pointed at the wrong one.
 
 Then copy the result into the app's Documents folder over USB with Finder
 (Files > On My iPad > WoWee). The app points `WOW_DATA_PATH` at
@@ -64,11 +70,17 @@ Then copy the result into the app's Documents folder over USB with Finder
 |---|---|---|
 | `login` | 787 MB | Login screen, character select and creation. No world. |
 | `world --maps azeroth` | 7.5 GB | One continent |
-| `world --maps all` | 12 GB | Every map |
+| `world --maps all` | 12 GB | Every map, no sound |
+| `world --maps azeroth --with-sound` | 13.5 GB | One continent, with sound |
 | `full` | 18 GB | Everything, sound included |
 
-Neither `login` nor `world` carries any sound. The client names 265 sound files
+Neither `login` nor `world` carries any sound: the matcher is an allowlist and
+`sound/` is in none of their include lists. The client names 265 sound files
 and `sound/` is 6 GB; the game runs without them.
+
+`full` is `**` minus the macOS `.app` bundles, the manual and the cinematics,
+so it keeps sound on its own - `--with-sound` is only for the combination of
+one continent *and* sound, which no stock profile expresses.
 
 `tools/android/README.md` documents the profiles and the checker that verifies
 one against the paths the client names.
