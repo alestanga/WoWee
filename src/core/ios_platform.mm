@@ -7,6 +7,7 @@
 #if defined(__APPLE__)
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <Photos/Photos.h>
 #include <SDL3/SDL_system.h>
 #include <SDL3/SDL_video.h>
 
@@ -149,6 +150,15 @@ void iosSetupDataPaths() {
         }
         setenv("WOW_DATA_PATH", data.UTF8String, 1);
         setenv("WOWEE_CONFIG_ROOT", config.UTF8String, 1);
+
+        // The extracted game data is tens of gigabytes and the player can
+        // always extract it again, so it must not go into the iCloud backup:
+        // that would fill the user's iCloud quota with a copy of their own
+        // WoW install and slow every backup down. The flag is a resource
+        // value on the directory, so it has to be set on the directory itself
+        // rather than on its contents.
+        NSURL* dataUrl = [NSURL fileURLWithPath:data isDirectory:YES];
+        [dataUrl setResourceValue:@YES forKey:NSURLIsExcludedFromBackupKey error:nil];
 
         LOG_INFO("iOS data root: ", docs.UTF8String);
         LOG_INFO("iOS resource root: ", resources ? resources.UTF8String : "(null)");
@@ -349,6 +359,84 @@ void iosShowAlert(const char* title, const char* message) {
 
 const char* iosSceneDelegateClassName() {
     return "WoWeeSceneDelegate";
+}
+
+void iosShareFile(const char* path) {
+#if defined(__APPLE__)
+    if (!path || !*path) return;
+    @autoreleasepool {
+        NSString* file = [NSString stringWithUTF8String:path];
+        NSURL* url = [NSURL fileURLWithPath:file];
+        if (!url || ![[NSFileManager defaultManager] fileExistsAtPath:file]) {
+            LOG_WARNING("Share: no such file: ", file);
+            return;
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIActivityViewController* sheet =
+                [[UIActivityViewController alloc] initWithActivityItems:@[url]
+                                                 applicationActivities:nil];
+
+            // On iPad a share sheet is a popover and needs an anchor, or UIKit
+            // throws instead of presenting it.
+            UIWindow* keyWindow = nil;
+            for (UIScene* scene in [UIApplication sharedApplication].connectedScenes) {
+                if ([scene isKindOfClass:[UIWindowScene class]] &&
+                    scene.activationState == UISceneActivationStateForegroundActive) {
+                    keyWindow = ((UIWindowScene*)scene).windows.firstObject;
+                    if (keyWindow) break;
+                }
+            }
+            UIViewController* root = keyWindow.rootViewController;
+            if (!root) return;
+            if (sheet.popoverPresentationController) {
+                sheet.popoverPresentationController.sourceView = root.view;
+                sheet.popoverPresentationController.sourceRect =
+                    CGRectMake(CGRectGetMidX(root.view.bounds),
+                               CGRectGetMidY(root.view.bounds), 1, 1);
+                sheet.popoverPresentationController.permittedArrowDirections = 0;
+            }
+            [root presentViewController:sheet animated:YES completion:nil];
+        });
+    }
+#endif
+}
+
+void iosSaveScreenshotToPhotos(const char* path) {
+#if defined(__APPLE__)
+    if (!path || !*path) return;
+    @autoreleasepool {
+        NSString* file = [NSString stringWithUTF8String:path];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:file]) {
+            LOG_WARNING("Photos: no such file: ", file);
+            return;
+        }
+
+        // PHPhotoLibrary is asked for add-only access; the prompt appears on
+        // its own the first time. A denial is not an error worth failing the
+        // screenshot over - the file is on disk either way.
+        [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelAddOnly
+                                                   handler:^(PHAuthorizationStatus status) {
+            if (status != PHAuthorizationStatusAuthorized &&
+                status != PHAuthorizationStatusLimited) {
+                LOG_WARNING("Photos: not authorized (", (int)status,
+                            "); the screenshot is only in the app's Documents");
+                return;
+            }
+            NSURL* url = [NSURL fileURLWithPath:file];
+            [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+                [PHAssetChangeRequest creationRequestForAssetFromImageAtFileURL:url];
+            } completionHandler:^(BOOL success, NSError* error) {
+                if (success) {
+                    LOG_INFO("Photos: screenshot saved to the photo library");
+                } else {
+                    LOG_WARNING("Photos: could not save the screenshot: ",
+                                error ? error.localizedDescription.UTF8String : "unknown");
+                }
+            }];
+        }];
+    }
+#endif
 }
 
 } // namespace core

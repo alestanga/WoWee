@@ -1336,7 +1336,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         target_link_libraries(wowee PRIVATE "${_MV_XCFW}/${_MV_SLICE}/libMoltenVK.a")
         target_link_libraries(wowee PRIVATE
             "-framework Metal" "-framework Foundation" "-framework QuartzCore"
-            "-framework CoreGraphics" "-framework IOSurface" "-framework UIKit")
+            "-framework CoreGraphics" "-framework IOSurface" "-framework UIKit"
+            "-framework Photos" "-framework PhotosUI")
         message(STATUS "MoltenVK (static) linked for iOS (${_MV_SLICE})")
     else()
         message(STATUS "MoltenVK not found at ${_MV_XCFW}/${_MV_SLICE}; building with dynamic_lookup (runtime link required)")
