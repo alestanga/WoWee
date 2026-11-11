@@ -14,6 +14,7 @@
 #include "ui/map_window.hpp"
 #include "addons/addon_manager.hpp"
 #include "core/coordinates.hpp"
+#include "core/config_paths.hpp"
 #include "core/input.hpp"
 #include "rendering/renderer.hpp"
 #include "rendering/post_process_pipeline.hpp"
@@ -1725,13 +1726,16 @@ void GameScreen::setGamma(float gamma) {
 
 namespace {
 
-/// ~/.wowee/<folder>/WoWee_YYYYMMDD_HHMMSS.<extension>, the name a screenshot
-/// or a recording is saved under.
+/// <config root>/<folder>/WoWee_YYYYMMDD_HHMMSS.<extension>, the name a
+/// screenshot or a recording is saved under.
+///
+/// The config root is where this client keeps everything else it writes
+/// (~/.wowee by default, or wherever WOWEE_CONFIG_ROOT points). It used to
+/// build $HOME/.wowee by hand, which on iOS points outside the app sandbox:
+/// the directory could not be created and every screenshot and recording
+/// silently failed to save.
 std::string capturePath(const char* folder, const char* extension) {
-    const char* home = std::getenv("HOME");
-    if (!home) home = std::getenv("USERPROFILE");
-    if (!home) home = "/tmp";
-    std::string dir = std::string(home) + "/.wowee/" + folder;
+    std::string dir = core::getConfigRoot() + "/" + folder;
 
     auto now = std::chrono::system_clock::now();
     auto tt  = std::chrono::system_clock::to_time_t(now);
