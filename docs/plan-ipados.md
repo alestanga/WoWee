@@ -126,11 +126,36 @@ Measured 2026-11-10 on an iPad Air 11" (M3), 2360x1640.
 - **FSR2/FSR3** need `shaderStorageImageWriteWithoutFormat` and
   `shaderInt16`; `setFSR2Enabled` refuses with a warning when the device
   cannot provide them.
-- **MetalFX is not reachable through MoltenVK.** It is a Metal-only API with
-  no Vulkan surface. `VK_EXT_metal_objects` (interop with Metal's own
-  resources) and `VK_EXT_fragment_density_map` exist in the bundled
-  `vulkan_core.h`, but neither is a practical way to get MetalFX's spatial
-  upscaler. FSR1 is the Vulkan-native equivalent.
+- **MetalFX is Metal-only, but MoltenVK can hand over Metal objects.**
+  MetalFX (`MTLFXSpatialScaler`, `MTLFXTemporalScaler`) has no Vulkan
+  surface, so it cannot be called from the renderer directly. The bridge is
+  `VK_EXT_metal_objects`, which **MoltenVK 1.4.2 supports on iOS 8.0+**
+  (`MoltenVK/MoltenVK/Layers/MVKExtensions.def`:
+  `MVK_EXTENSION(EXT_metal_objects, EXT_METAL_OBJECTS, DEVICE, 10.11, 8.0, 1.0)`).
+  Its `getMetalObjects` implementation exports the device, the command queue,
+  buffers, textures and shared events (`MVKDevice.mm`), so the pieces a
+  MetalFX pass needs are all reachable.
+
+  What is *not* settled is the surrounding work, which is why this is not
+  simply "add MetalFX":
+  - The extension is a **device** extension and is **off by default**.
+    MoltenVK enables extensions only when asked
+    (`MVKExtension::MVKExtension` sets `enabled = enableForPlatform && ...`),
+    so the client must enable it explicitly alongside its other
+    `enable_extension_if_present` calls.
+  - MetalFX encodes into an `MTLCommandBuffer`; the client's frame is a
+    Vulkan command buffer on MoltenVK's queue. Ordering the two needs
+    `MTLSharedEvent` plumbing that `VK_EXT_metal_objects` also provides, but
+    nothing in this codebase does it yet.
+  - The client's render targets would have to be created so that the Metal
+    side can use them, and the final upscale has to land back in a Vulkan
+    image the present path can read.
+  - `MTLFXTemporalScaler` additionally wants depth and motion vectors. The
+    client has a motion-vector pass (`dispatchMotionVectors`), so that part
+    is in reach; `MTLFXSpatialScaler` wants colour only.
+
+  So the route is open but it is a project, not a flag. FSR1 is the
+  Vulkan-native equivalent and is already wired.
 
 ### Open performance work (next session)
 
