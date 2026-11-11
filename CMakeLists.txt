@@ -1678,12 +1678,45 @@ endif()
 # Copy assets next to the executable (runs every build, not just configure).
 # Uses $<TARGET_FILE_DIR:wowee> so MSVC multi-config generators place assets
 # in bin/Debug/ or bin/Release/ alongside the exe, not the common bin/ parent.
-add_custom_command(TARGET wowee POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/assets
-        $<TARGET_FILE_DIR:wowee>/assets
-    COMMENT "Syncing assets to $<TARGET_FILE_DIR:wowee>/assets"
-)
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    # On a device the assets are inside the app bundle, and what is in them
+    # decides how big the download is. The whole tree is 89 MB, of which:
+    #
+    #   - Original Music is 73 MB. It is the project's own soundtrack and it
+    #     plays from the game's own paths on the desktop, where the source
+    #     tree is one directory away. On a device the music would have to
+    #     ship inside the bundle to be found at all, and 73 MB of mp3 for a
+    #     login theme is not a trade worth making on a device with a metered
+    #     install. It stays in the repository and the desktop build.
+    #   - The three screenshots the README shows (hellfire-peninsula,
+    #     orgrimmar-entrance, wowee-soundtrack) are documentation. Nothing in
+    #     the client opens them.
+    #
+    # What the client does read is copied in full: the shaders, the loading
+    # and sign-in screens, and the icon.
+    add_custom_command(TARGET wowee POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders
+            $<TARGET_FILE_DIR:wowee>/assets/shaders
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/Wowee.png
+            $<TARGET_FILE_DIR:wowee>/assets/Wowee.png
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/krayonload.png
+            $<TARGET_FILE_DIR:wowee>/assets/krayonload.png
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/krayonsignin.png
+            $<TARGET_FILE_DIR:wowee>/assets/krayonsignin.png
+        COMMENT "Syncing runtime assets into the iOS bundle"
+    )
+else()
+    add_custom_command(TARGET wowee POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets
+            $<TARGET_FILE_DIR:wowee>/assets
+        COMMENT "Syncing assets to $<TARGET_FILE_DIR:wowee>/assets"
+    )
+endif()
 
 # Symlink Data/ next to the executable so expansion profiles, opcode tables,
 # and other runtime data files are found when running from the build directory.
