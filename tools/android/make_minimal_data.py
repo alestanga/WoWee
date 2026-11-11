@@ -289,9 +289,12 @@ def main():
     if integrity == 0:
         print("no expansions/*/misc/WoW.exe in the source: a server that runs Warden "
               "will see failed memory checks from this device.")
-    print("\nOn a device, after opening the app once:\n"
+    print("\nOn an Android device, after opening the app once:\n"
           "  adb push %s/. /sdcard/Android/data/com.wowee.client/files/Data/\n"
           "  adb shell chmod -R a+rwX /sdcard/Android/data/com.wowee.client/files/Data" % out)
+    print("\nOn an iPad, copy the contents of %s into the WoWee app's Documents\n"
+          "folder (Files > On My iPad > WoWee), replacing the Data folder there."
+          % out)
     return 0
 
 
