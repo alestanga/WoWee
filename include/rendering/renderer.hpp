@@ -414,6 +414,14 @@ public:
     void setFSREnabled(bool enabled);
     void setFSR2Enabled(bool enabled);
 
+    /// The size the world is drawn at before it is upscaled onto the screen.
+    ///
+    /// Zero on both means the quality setting's fraction of the screen. A
+    /// width and a height draw the world at exactly that size, which is what
+    /// the game's own resolution selector asks for.
+    void setRenderTargetSize(uint32_t width, uint32_t height);
+    void clearRenderTargetSize();
+
     void setWaterRefractionEnabled(bool enabled);
 
 private:

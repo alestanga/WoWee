@@ -190,7 +190,35 @@ void GameScreen::setResolutionIndex(int index) {
     if (services_.window)
         services_.window->applyResolution(settingsPanel_.pendingResolutionWidth,
                                           settingsPanel_.pendingResolutionHeight);
+    // On a platform whose window cannot be resized, the resolution became the
+    // size the world is drawn at, and it reaches the screen through the
+    // upscaler - so without one the choice would be accepted and nothing
+    // would change, which is the same broken control this used to be.
+    ensureUpscalerForRenderResolution();
     saveSettings();
+}
+
+void GameScreen::ensureUpscalerForRenderResolution() {
+    if (!services_.window || !services_.renderer) return;
+    // Only where the window cannot be resized. On a desktop the resolution
+    // resized the window and the world was drawn at that size directly, and
+    // turning the upscaler on there would change a setting the player did
+    // not touch.
+    if (services_.window->canResizeWindow()) return;
+    if (services_.window->getRenderResolutionWidth() <= 0) return;
+    // FSR 1 and FSR 3 both upscale; whichever the player already chose keeps
+    // working. Only a player with upscaling turned off entirely gets it
+    // turned on for them, because otherwise the resolution they just picked
+    // would do nothing at all.
+    if (settingsPanel_.pendingUpscalingMode != 0) return;
+    settingsPanel_.pendingUpscalingMode = 1;
+    settingsPanel_.pendingFSR = true;
+    services_.renderer->setFSREnabled(true);
+    services_.renderer->setFSR2Enabled(false);
+    LOG_WARNING("A resolution was chosen but upscaling was off: FSR 1 turned on so "
+                "the world can be drawn at ", services_.window->getRenderResolutionWidth(),
+                "x", services_.window->getRenderResolutionHeight(),
+                " and scaled up to the screen");
 }
 
 /// Anti-aliasing, shared with the interface's own Multisampling dropdown.
@@ -238,6 +266,11 @@ void GameScreen::setServices(const UIServices& services) {
         services_.window->setFullscreen(settingsPanel_.pendingFullscreen);
         services_.window->applyResolution(settingsPanel_.pendingResolutionWidth,
                                           settingsPanel_.pendingResolutionHeight);
+        // The same as when the player picks a resolution by hand: on a
+        // platform whose window cannot be resized the saved resolution is the
+        // size the world is drawn at, and it needs the upscaler to reach the
+        // screen.
+        ensureUpscalerForRenderResolution();
     }
     // Update legacy pointer for compatibility
     appearanceComposer_ = services.appearanceComposer;
