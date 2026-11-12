@@ -92,13 +92,20 @@ echo "Container: $CONTAINER"
 
 push_config() {
     local mode="$1" dest="$2"
-    # The keys the client reads for this test. antialiasing and vsync are
-    # off so the measurement is the upscaler and not the present path.
+    # The keys the client reads for this test. antialiasing and vsync are off
+    # so the measurement is the upscaler and not the present path.
+    #
+    # loglevel and frameprofile are the two diagnostics that reach a device:
+    # an environment variable cannot, so they are read from the config file.
+    # frameprofile=1 reports the per-stage and GPU breakdowns at warning level,
+    # which is the level the log keeps by default.
     cat > "$WORK/settings.cfg" <<EOF
 upscaling_mode=$mode
 fsr_quality=$QUALITY
 antialiasing=0
 vsync=0
+loglevel=info
+frameprofile=1
 EOF
     xcrun devicectl device copy to --device "$UDID" \
         --domain-type appDataContainer --domain-identifier "$CONTAINER" \

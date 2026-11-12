@@ -30,6 +30,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROFILES = HERE / "data_profiles.json"
+REPO_ROOT = HERE.parent.parent
 
 # Entries are one per line, as manifest_writer.cpp emits them.
 ENTRY_PATH = re.compile(r'"p":\s*"([^"]*)"')
@@ -130,31 +131,73 @@ def place(src, dst, copy):
 # one of those describes thousands of files to the client that the subset does
 # not contain: it indexes them, finds nothing, and the world renders with holes
 # in it. Same list as the staging task in android/app/build.gradle.
-REPO_JSON = [
-    "expansions/*/dbc_layouts.json",
-    "expansions/*/expansion.json",
-    "expansions/*/opcodes.json",
-    "expansions/*/update_fields.json",
-    "opcodes/aliases.json",
-    "opcodes/canonical.json",
+#
+# The expansion tables live in the expansion's own directory, which is where
+# asset_extract puts them: the repository's Data/expansions/<id>/ for a
+# checkout, or the same directory inside an extraction made with
+# --expansion-subdir. They are looked up by name rather than by pattern,
+# because the two layouts put them at different depths and a pattern that
+# fits one of them matches nothing in the other.
+EXPANSION_TABLES = [
+    "dbc_layouts.json",
+    "expansion.json",
+    "opcodes.json",
+    "update_fields.json",
+]
+
+OPCODE_TABLES = [
+    "aliases.json",
+    "canonical.json",
 ]
 
 
-def copy_repo_json(source, out, dry_run):
-    """The expansion profiles and opcode tables are not in the manifest.
+def copy_expansion_tables(exp_dir, expansion, out, dry_run):
+    """The expansion's own tables, which are not in the manifest.
 
-    They come from the repository rather than from anyone's MPQs, and the client
-    reads them by path. A subset without them loads no expansion at all.
+    They come from the repository rather than from anyone's MPQs, and the
+    client reads them by path. A subset without them loads no expansion at
+    all, so they are written where the client looks for them:
+    out/expansions/<id>/.
+
+    An extraction made with --expansion-subdir has them nowhere, because they
+    were never part of the MPQs; the repository's Data/expansions/<id>/ holds
+    them, and that is the second place looked in.
     """
     count = 0
-    for pattern in REPO_JSON:
-        for path in sorted(source.glob(pattern)):
-            if not path.is_file():
-                continue
-            count += 1
-            if not dry_run:
-                place(path, out / path.relative_to(source), copy=False)
+    dest_dir = out / "expansions" / expansion
+    repo_dir = REPO_ROOT / "Data" / "expansions" / expansion
+    for name in EXPANSION_TABLES:
+        path = exp_dir / name
+        if not path.is_file():
+            path = repo_dir / name
+        if not path.is_file():
+            continue
+        count += 1
+        if not dry_run:
+            place(path, dest_dir / name, copy=False)
     return count
+
+
+def copy_opcode_tables(data_root, out, dry_run):
+    """The opcode tables, which sit beside the expansions rather than in one.
+
+    The client reads the expansion's own opcodes.json; these two are the
+    cross-expansion naming tables, and the repository's Data/opcodes/ holds
+    them rather than any extraction.
+    """
+    count = 0
+    dest_dir = out / "opcodes"
+    for name in OPCODE_TABLES:
+        path = data_root / "opcodes" / name
+        if not path.is_file():
+            path = REPO_ROOT / "Data" / "opcodes" / name
+        if not path.is_file():
+            continue
+        count += 1
+        if not dry_run:
+            place(path, dest_dir / name, copy=False)
+    return count
+
 
 
 # The executable the extractor caches for Warden, and the DLLs the login
@@ -162,22 +205,71 @@ def copy_repo_json(source, out, dry_run):
 # keeps them, and a phone without them answers every Warden memory check as
 # unmapped and cannot compute the integrity hash - a server that checks either
 # sees a client that is not the real one.
-INTEGRITY_FILES = [
-    "expansions/*/misc/*.exe",
-    "expansions/*/misc/*.dll",
-]
-
-
-def copy_integrity_files(source, out, dry_run):
+#
+# The extractor caches them into the expansion's own misc/ directory, which is
+# where they are looked for here.
+def copy_integrity_files(exp_dir, expansion, out, dry_run):
     count = 0
-    for pattern in INTEGRITY_FILES:
-        for path in sorted(source.glob(pattern)):
-            if not path.is_file():
-                continue
-            count += 1
-            if not dry_run:
-                place(path, out / path.relative_to(source), copy=False)
+    misc = exp_dir / "misc"
+    if not misc.is_dir():
+        return 0
+    dest_dir = out / "expansions" / expansion / "misc"
+    for path in sorted(misc.iterdir()):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() not in (".exe", ".dll"):
+            continue
+        count += 1
+        if not dry_run:
+            place(path, dest_dir / path.name, copy=False)
     return count
+
+
+def resolve_source(source):
+    """Find the data root and the expansion directory in whatever was given.
+
+    An extraction is a directory with a manifest.json in it, and that directory
+    is the data root - the manifest's paths are relative to it. Two shapes are
+    in the wild and both are accepted:
+
+      <expansion>/            a directory holding manifest.json, the expansion's
+                               own tables beside it, and misc/ with the
+                               executables the extractor cached.
+      <root>/expansions/<id>/ the same, one level down under a Data root
+                               that also holds the opcode tables.
+
+    Returns (data_root, expansion_dir, expansion_id).
+    """
+    if (source / "manifest.json").is_file():
+        data_root = source
+    else:
+        data_root = None
+        for candidate in sorted(source.glob("expansions/*/manifest.json")):
+            data_root = candidate.parent
+            break
+        if data_root is None:
+            return None, None, None
+
+    expansion = ""
+    try:
+        with open(data_root / "manifest.json", encoding="utf-8") as handle:
+            head = handle.read(4096)
+        found = re.search(r'"expansion"\s*:\s*"([^"]*)"', head)
+        if found:
+            expansion = found.group(1)
+    except OSError:
+        pass
+
+    if not expansion:
+        # Fall back to the name of the directory the manifest sits in.
+        expansion = data_root.name
+        if expansion in ("expansions", "Data", "data"):
+            expansion = ""
+
+    # The expansion's own tables sit beside its manifest in an extraction, and
+    # under Data/expansions/<id>/ in a checkout. Either way, the directory
+    # that holds the manifest is the one that has them.
+    return data_root, data_root, expansion
 
 
 def main():
@@ -213,10 +305,12 @@ def main():
         profile["include"] = list(profile["include"]) + ["sound/**"]
 
     source = Path(args.source).expanduser().resolve()
-    manifest = source / "manifest.json"
-    if not manifest.is_file():
-        print("no manifest.json in %s - that is not an extracted data root." % source)
+    data_root, exp_dir, expansion = resolve_source(source)
+    if data_root is None:
+        print("no manifest.json in %s, and no expansions/*/manifest.json under it - "
+              "that is not an extracted data root." % source)
         return 1
+    manifest = data_root / "manifest.json"
 
     if not args.dry_run and not args.out:
         print("--out is required unless --dry-run is given.")
@@ -246,7 +340,7 @@ def main():
                 continue
             seen += 1
             rel = found.group(1)
-            src = source / rel
+            src = data_root / rel
             try:
                 size = src.stat().st_size
             except OSError:
@@ -291,14 +385,15 @@ def main():
         handle.write("  }\n")
         handle.write("}\n")
 
-    extra = copy_repo_json(source, out, dry_run=False)
+    extra = copy_expansion_tables(exp_dir, expansion, out, dry_run=False)
+    extra += copy_opcode_tables(source, out, dry_run=False)
     print("wrote manifest.json with %d entries, plus %d expansion and opcode files."
           % (len(kept_lines), extra))
-    integrity = copy_integrity_files(source, out, dry_run=False)
+    integrity = copy_integrity_files(exp_dir, expansion, out, dry_run=False)
     print("copied %d client executable and DLL files for Warden and the login hash."
           % integrity)
     if integrity == 0:
-        print("no expansions/*/misc/WoW.exe in the source: a server that runs Warden "
+        print("no misc/WoW.exe in the source: a server that runs Warden "
               "will see failed memory checks from this device.")
     print("\nOn an Android device, after opening the app once:\n"
           "  adb push %s/. /sdcard/Android/data/com.wowee.client/files/Data/\n"
