@@ -18,6 +18,13 @@
 #include <filesystem>
 #include <string>
 
+#if defined(WOWEE_IOS)
+// MoltenVK's own configuration header - only included where the library it
+// describes is linked, which is iOS only (see CMakeLists.txt).
+#include <MoltenVK/mvk_deprecated_api.h>
+#include "core/config_paths.hpp"
+#endif
+
 namespace wowee {
 namespace rendering {
 
@@ -467,6 +474,64 @@ bool VkContext::createInstance([[maybe_unused]] SDL_Window* window) {
     LOG_INFO("Vulkan instance created (instance API version: ",
              VK_VERSION_MAJOR(instVer), ".", VK_VERSION_MINOR(instVer), ".",
              VK_VERSION_PATCH(instVer), ")");
+
+#if defined(WOWEE_IOS)
+    // MoltenVK's own configuration, read back and - when asked for - changed.
+    //
+    // vkQueueSubmit() blocks for as long as MoltenVK takes to process the
+    // submission, and by default it processes submissions on the thread that
+    // called it. When the GPU has nothing queued that submit waits out the
+    // presentation chain rather than returning, and the wait is a floor under
+    // the frame rate that the present mode does not move: the login screen
+    // runs at exactly 30.00 fps with 3ms of GPU work in it, and it runs at
+    // 30.00 fps with vsync off (IMMEDIATE) and at 29.95 fps with vsync on
+    // (FIFO). MVK_CONFIG_SYNCHRONOUS_QUEUE_SUBMITS=0 hands the processing to
+    // a GCD queue instead, which takes the wait off the frame and lets the
+    // next frame be recorded while this one is still on the GPU.
+    //
+    // An environment variable is the documented way to set it, and an app on
+    // a device is never given one. This is the other way: deprecated in
+    // favour of VK_EXT_layer_settings, which needs a pNext chain on the
+    // instance and vk-bootstrap's InstanceBuilder does not take one - adding
+    // it would mean forking the submodule.
+    {
+        MVKConfiguration cfg{};
+        size_t cfgSize = sizeof(cfg);
+        VkResult got;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        got = vkGetMoltenVKConfigurationMVK(VK_NULL_HANDLE, &cfg, &cfgSize);
+#pragma clang diagnostic pop
+        if (got != VK_SUCCESS && got != VK_INCOMPLETE) {
+            LOG_WARNING("Could not read the MoltenVK configuration (",
+                        static_cast<int>(got), ")");
+        } else {
+            const bool wantAsync = core::configFlag("asyncsubmit");
+            LOG_WARNING("MoltenVK: synchronousQueueSubmits=",
+                        cfg.synchronousQueueSubmits ? 1 : 0,
+                        ", maxActiveMetalCommandBuffersPerQueue=",
+                        cfg.maxActiveMetalCommandBuffersPerQueue,
+                        wantAsync
+                            ? " (asyncsubmit=1 - turning synchronous submits off)"
+                            : "");
+            if (wantAsync && cfg.synchronousQueueSubmits) {
+                cfg.synchronousQueueSubmits = VK_FALSE;
+                VkResult put;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+                put = vkSetMoltenVKConfigurationMVK(VK_NULL_HANDLE, &cfg, &cfgSize);
+#pragma clang diagnostic pop
+                if (put == VK_SUCCESS) {
+                    LOG_WARNING("MoltenVK synchronous queue submits turned off");
+                } else {
+                    LOG_WARNING("MoltenVK configuration not changed (",
+                                static_cast<int>(put), ")");
+                }
+            }
+        }
+    }
+#endif
+
     return true;
 }
 
