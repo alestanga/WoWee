@@ -44,15 +44,15 @@ def test_exclude_beats_include():
 
 
 def test_maps_narrowing():
-    profile = {"include": ["terrain/maps/**", "db/**"]}
+    profile = {"include": ["world/maps/**", "dbfilesclient/**"]}
     keep = build_filter(profile, ["azeroth"])
-    check(keep("terrain/maps/azeroth/a.adt"), "the named map should be kept")
-    check(not keep("terrain/maps/kalimdor/a.adt"), "an unnamed map should be dropped")
-    check(keep("db/spell.dbc"), "narrowing maps must not touch anything else")
+    check(keep("world/maps/azeroth/a.adt"), "the named map should be kept")
+    check(not keep("world/maps/kalimdor/a.adt"), "an unnamed map should be dropped")
+    check(keep("dbfilesclient/spell.dbc"), "narrowing maps must not touch anything else")
 
-    # A profile that carries no terrain stays that way when maps are named.
-    keep = build_filter({"include": ["db/**"]}, ["azeroth"])
-    check(not keep("terrain/maps/azeroth/a.adt"),
+    # A profile that carries no world stays that way when maps are named.
+    keep = build_filter({"include": ["dbfilesclient/**"]}, ["azeroth"])
+    check(not keep("world/maps/azeroth/a.adt"),
           "naming a map must not add terrain to a profile that excludes it")
 
 
