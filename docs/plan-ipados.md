@@ -104,17 +104,39 @@ branch, open PR upstream when stable. See README/CONTRIBUTING.md.
 
 Measured 2026-11-10 on an iPad Air 11" (M3), 2360x1640.
 
+- **The numbers below were measured on a Debug build, and a Debug build is not
+  a measurement of anything.** `enableValidation` follows `NDEBUG`
+  (`include/rendering/vk_context.hpp`), so a Debug build loads the Khronos
+  validation layer, which intercepts and checks every Vulkan call - and the
+  renderer makes thousands of them per frame. A Debug build also compiles at
+  `-Og` rather than `-O3`. `cmake/ios.toolchain.cmake` now defaults to
+  Release, for that reason.
+
+  It also inflates the GPU numbers, which is the part that makes it
+  misleading rather than merely slow: the marks are
+  `VK_PIPELINE_STAGE_BOTTOM_OF_PIPE` timestamps, so they measure elapsed
+  GPU-queue time *including the gaps*. If the CPU cannot record the frame
+  fast enough the GPU starves, and the gap is charged to whichever pass it
+  lands in. "The world pass is 63.5 ms of 76" may be starvation rather
+  than fragment work.
+
+  So the first thing a Release build has to answer is whether the frame is
+  still 76 ms of GPU time. If it is not, nothing below needs chasing.
 - **The frame is GPU-bound.** Every render stage is under 50 ms except
   `endFrame`, which sits continuously at **75-80 ms** - post-process, the UI
   overlay, submit and the present wait. That is ~13 fps at native resolution,
   and ~9 fps in the denser parts of the world. Vsync cannot help when the GPU
   itself is the bottleneck.
-- **The resolution selector does nothing on iPad.** It is a window-size
-  request, and SDL's UIKit backend has no `SetWindowSize` implementation at
-  all, so the window stays at the native 2360x1640 and the swapchain is
-  recreated at the same size. With `fullscreen=1` every 16:9 row fails the
-  aspect guard against the iPad's ~1.44:1 display, so it keeps the desktop
-  mode - also a no-op. It is not a render-scale control.
+- **The 30 -> 20 -> 15 -> 12 fps steps are vsync quantisation, not a cap.**
+  They are 60 Hz vsync intervals of 2, 3, 4 and 5 (33, 50, 67 and 83 ms),
+  and a 76 ms GPU frame lands in the fifth one. The frame cap is unlimited
+  by default (`frameCapFpsForChoice(0)` returns 0).
+- **The resolution selector now sets the internal resolution, upscaled by
+  FSR1** (`56eb6fae`), and the list it offers is derived from the device's
+  own screen (`00c74bf4`). On a platform that can resize its window
+  nothing changes; on the iPad the world is drawn at the requested size and
+  stretched onto the surface. Measured on the device:
+  `FSR: initializing at 1036x720 -> 2360x1640 (scale=0.67)`.
 - **FSR1 upscaling is already wired** and should work on iPad:
   `setFSREnabled` / `setFSRQuality` in `PostProcessPipeline`, with the
   client's own EASU/RCAS shaders (`fsr_easu.frag.spv`, `fsr_rcas.frag.spv`)
@@ -159,12 +181,18 @@ Measured 2026-11-10 on an iPad Air 11" (M3), 2360x1640.
 
 ### Open performance work (next session)
 
-1. Measure FSR1 on the device. The device config has been pushed with
-   `upscaling_mode=1`, `fsr_quality=1` (67%), `antialiasing=0`, `vsync=0`;
-   the run was interrupted because the iPad was locked. Compare the
-   `SLOW render stage 'endFrame'` lines against the 75-80 ms baseline.
-2. If FSR1 works, the real win is a *render scale* (draw the world smaller,
-   upscale), which is what the resolution selector should have been.
-3. Other levers on the M3: the heavy settings in the saved profile (shadows
-   300 yd, view distance 1900, POM, 16x aniso, particles 100%, water
-   refraction), and a working pipeline cache on iOS.
+1. **Rebuild Release and re-measure.** Everything measured so far was
+   measured on a Debug build with the validation layer loaded, which is not a
+   measurement of the client. `tools/ios-fsr-measure.sh` does the
+   comparison; it needs a Release build to be worth anything.
+2. If the frame is still 76 ms of GPU time after that, the levers in order
+   of cost on a tiler:
+   - `antialiasing=0` - 2x MSAA at 2360x1640 is 7.7M samples and a
+     full-screen resolve.
+   - `pom=0` - 32 parallax steps per pixel on WMO and character surfaces.
+   - the resolution selector, now that it sets the internal resolution.
+   - `shadowdistance` 300 -> 150, and the view distance.
+   - the heavy settings in the saved profile (16x aniso, particles 100%,
+     water refraction), and a working pipeline cache on iOS.
+
+   `tools/ios-fsr-measure.sh` measures against a baseline and prints both.

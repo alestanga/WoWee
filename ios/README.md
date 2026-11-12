@@ -28,11 +28,17 @@ rather than taken from vcpkg.
 
 ```
 cmake -S . -B build-ios \
-  -DCMAKE_TOOLCHAIN_FILE=cmake/ios.toolchain.cmake \
-  -DCMAKE_BUILD_TYPE=Debug
+  -DCMAKE_TOOLCHAIN_FILE=cmake/ios.toolchain.cmake
 xcodebuild -project build-ios/wowee.xcodeproj -scheme wowee \
-  -configuration Debug -destination 'id=<udid>' build
+  -configuration Release -destination 'id=<udid>' build
 ```
+
+**Build Release.** A Debug build is not a measurement of anything: it runs
+the Khronos validation layer, which intercepts and checks every Vulkan call
+(`enableValidation` follows `NDEBUG`, and `NDEBUG` is not defined in a
+Debug build), and it compiles at `-Og` rather than `-O3`. The renderer makes
+thousands of Vulkan calls per frame, so the difference is not a few percent.
+A Debug build is for the crash it was built to catch.
 
 The app bundle is written by the build. Install and run it with `devicectl`:
 
@@ -43,6 +49,21 @@ xcrun devicectl device process launch --device <udid> com.wowee.client
 
 MoltenVK is linked statically from `extern/MoltenVK`, so Vulkan runs on Metal.
 It is not in this repository; see the plan for where it comes from.
+
+### Measuring
+
+The per-stage and GPU breakdowns are logged at INFO, and the log keeps
+warnings by default. Two keys in `settings.cfg` change that, and they are read
+from the config file because an environment variable cannot reach an app on
+iOS:
+
+```
+loglevel=info
+frameprofile=1
+```
+
+`frameprofile=1` reports the same breakdowns at warning level, so they
+survive the default log level. Both work in a Release build.
 
 ## Game data
 
