@@ -848,11 +848,25 @@ bool Renderer::initialize(core::Window* win) {
         std::getenv("WOWEE_PASS_ABLATION") != nullptr ||
         core::configFlag("passablation");
     if (ablationRequested) {
-        passAblation_ = std::make_unique<PassAblation>();
+        // How long the world is given to finish loading before the first
+        // phase is measured, in seconds. It was ten, and ten is wrong: a
+        // zone reaches its settled cost about forty seconds after it is
+        // entered, so the first run walked four of its phases through a
+        // world still getting heavier - frame time climbed from 33ms to
+        // 50ms underneath them while passes were being switched off.
+        double settleSeconds = 50.0;
+        if (const std::string fromConfig = core::configSetting("ablationsettle");
+            !fromConfig.empty()) {
+            settleSeconds = std::atof(fromConfig.c_str());
+        }
+        passAblation_ = std::make_unique<PassAblation>(4000.0, 750.0,
+                                                       settleSeconds * 1000.0);
         LOG_WARNING("Pass ablation enabled - ", PassAblation::phaseCount(),
                     " phases over about ",
                     static_cast<int>(passAblation_->expectedRunMs() / 1000.0),
-                    "s of being in the world, the first 10s of it settling. Stand "
+                    "s of being in the world, the first ",
+                    static_cast<int>(settleSeconds),
+                    "s of it settling. Stand "
                     "still outdoors, do not move the camera, and do not quit before "
                     "the table is logged.");
     }
@@ -1223,8 +1237,18 @@ void Renderer::beginFrame() {
         if (worldDrawnLastFrame_ && lastFrameStart_.time_since_epoch().count() != 0) {
             const bool wasSettling = passAblation_->settling();
             const AblationPass before = passAblation_->current();
+            const std::size_t beforeNumber = passAblation_->phaseNumber();
             passAblation_->frame(std::chrono::duration<double, std::milli>(
                 now - lastFrameStart_).count());
+            // The phase that has just ended, said the moment it ends. The
+            // table at the end is one block of output that a device lost or a
+            // quit takes with it - the first run of this died a second into
+            // its final phase and left no numbers at all - and a run that
+            // dies still owes every phase it held.
+            if (passAblation_->phaseNumber() != beforeNumber) {
+                const std::string done = passAblation_->finishedSummary();
+                if (!done.empty()) LOG_WARNING("Pass ablation done: ", done);
+            }
             // Say where it has got to. A run is the better part of a minute of
             // standing still and the first one silently went eight phases deep
             // before it was quit, with no way to tell it had started.
