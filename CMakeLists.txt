@@ -1334,6 +1334,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     endif()
     if(EXISTS "${_MV_XCFW}/${_MV_SLICE}/libMoltenVK.a")
         target_link_libraries(wowee PRIVATE "${_MV_XCFW}/${_MV_SLICE}/libMoltenVK.a")
+        # MoltenVK's own headers, for reading and changing its configuration in
+        # vk_context.cpp. Only added where this library was linked: the headers
+        # belong to the library just linked, and nothing else includes them.
+        target_include_directories(wowee PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/extern/MoltenVK/MoltenVK/MoltenVK/include")
         target_link_libraries(wowee PRIVATE
             "-framework Metal" "-framework Foundation" "-framework QuartzCore"
             "-framework CoreGraphics" "-framework IOSurface" "-framework UIKit"
