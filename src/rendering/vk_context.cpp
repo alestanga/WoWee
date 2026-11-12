@@ -409,17 +409,27 @@ bool VkContext::createInstance([[maybe_unused]] SDL_Window* window) {
         builder.enable_extension(ext);
     }
 
-    // Allow turning validation on in a release build via env var, so the
-    // Khronos validation layer's messages (e.g. the exact VK error behind an
-    // FSR3 pipeline-creation failure) get routed to our log via debugCallback.
+    // Turning validation on in a release build, so the Khronos validation
+    // layer's messages (e.g. the exact VK error behind an FSR3
+    // pipeline-creation failure) get routed to our log via debugCallback. And
+    // off in a debug build, for when the layer is in the way of a measurement.
     bool enableValidationEffective = enableValidation;
     if (const char* v = std::getenv("WOWEE_VULKAN_VALIDATION")) {
         if (v[0] && v[0] != '0') enableValidationEffective = true;
+        else if (v[0] == '0') enableValidationEffective = false;
     }
     if (enableValidationEffective) {
         builder.request_validation_layers(true)
                .set_debug_callback(debugCallback);
-        LOG_INFO("Vulkan validation layers requested");
+        // A warning, not an info: the layer makes every Vulkan call cost
+        // several times what it costs without it, so a frame measured with it
+        // loaded is not a measurement of the client. It has to survive the
+        // default log level, or the run that needs it says nothing.
+        LOG_WARNING("Vulkan validation layers are loaded - every Vulkan call is "
+                    "intercepted and checked. Timings taken now are not "
+                    "timings of the client. Build Release, or set "
+                    "WOWEE_VULKAN_VALIDATION=0 is not enough: the layer is off "
+                    "by default in a build with NDEBUG defined.");
 
         // WOWEE_VULKAN_GPU_VALIDATION=1 additionally instruments the shaders.
         //
