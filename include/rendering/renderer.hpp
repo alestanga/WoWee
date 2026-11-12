@@ -525,6 +525,13 @@ private:
     VkCommandBuffer secondaryCmds_[NUM_SECONDARIES][MAX_FRAMES] = {};
 
     bool parallelRecordingEnabled_ = false;  // set true after pools/buffers created
+
+    // Read once, at initialize, from WOWEE_FRAME_PROFILE or the frameprofile
+    // key of settings.cfg. Not at the first frame that reports: the game
+    // screen rewrites settings.cfg when the world opens, and it writes only
+    // the keys a settings panel owns - so a flag read after that point reads
+    // a file the diagnostics have already been dropped from.
+    bool frameProfileLog_ = false;
     // WOWEE_PASS_ABLATION: switches one world pass off at a time and reports
     // what the frame did without it. See pass_ablation.hpp for why the GPU's
     // own timestamps cannot answer that on this platform.

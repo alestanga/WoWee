@@ -701,6 +701,10 @@ bool Renderer::initialize(core::Window* win) {
     window = win;
     vkCtx = win->getVkContext();
     deferredWorldInitEnabled_ = core::envFlagEnabled("WOWEE_DEFER_WORLD_SYSTEMS", true);
+    // Before the world opens: settings.cfg is rewritten then, and a diagnostic
+    // key that the writer does not know about is not in what it writes back.
+    frameProfileLog_ = core::envFlagEnabled("WOWEE_FRAME_PROFILE", false) ||
+                       core::configFlag("frameprofile");
     LOG_INFO("Initializing renderer (Vulkan)");
 
     // Create camera (in front of Stormwind gate, looking north)
@@ -3189,8 +3193,12 @@ void Renderer::renderWorld(game::World* world, game::GameHandler* gameHandler) {
         // spends here decides the frame as much as any pass does - and the
         // 40ms threshold below only ever speaks when something has already
         // gone wrong. This says where the steady state goes.
-        static const bool frameProfile = core::envFlagEnabled("WOWEE_FRAME_PROFILE", false);
-        if (frameProfile) {
+        // Config or environment, decided at initialize. The counts are the
+        // point of the line: a slow frame is either a lot of draws or
+        // expensive ones, and only these two numbers say which - the GPU
+        // marks cannot, because this driver resolves a timestamp to its
+        // render pass.
+        if (frameProfileLog_) {
             static auto lastSaid = std::chrono::steady_clock::now();
             const auto sayNow = std::chrono::steady_clock::now();
             if (sayNow - lastSaid > std::chrono::seconds(10)) {
@@ -3203,7 +3211,17 @@ void Renderer::renderWorld(game::World* world, game::GameHandler* gameHandler) {
                             "), terrain chunks drawn ",
                             terrainRenderer ? terrainRenderer->getRenderedChunkCount() : 0,
                             " culled ",
-                            terrainRenderer ? terrainRenderer->getCulledChunkCount() : 0);
+                            terrainRenderer ? terrainRenderer->getCulledChunkCount() : 0,
+                            " resident ",
+                            terrainRenderer ? terrainRenderer->getChunkCount() : 0,
+                            " | m2 draws ",
+                            m2Renderer ? m2Renderer->getDrawCallCount() : 0,
+                            " instances ",
+                            m2Renderer ? m2Renderer->getInstanceCount() : 0,
+                            " | wmo draws ",
+                            wmoRenderer ? wmoRenderer->getDrawCallCount() : 0,
+                            " instances ",
+                            wmoRenderer ? wmoRenderer->getInstanceCount() : 0);
             }
         }
 
