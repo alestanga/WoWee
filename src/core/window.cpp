@@ -233,6 +233,29 @@ bool Window::initialize() {
                     drawableWidth, "x", drawableHeight,
                     " pixel surface - the world is drawn at the pixel size.");
     }
+
+    // The resolutions this device offers, built now that both the screen's
+    // size and the answer to whether the window can be resized are known.
+    //
+    // The screen's size is the surface's, in pixels - the surface is what
+    // the world is drawn on, so a resolution that does not fit it is a
+    // resolution the device does not have. Where the window cannot be
+    // resized this is the whole list the player can choose from.
+    {
+        const int screenW = std::max(drawableWidth, width);
+        const int screenH = std::max(drawableHeight, height);
+        displayResolutions_ = canResizeWindow_
+            ? ui::displayResolutionsForDesktop()
+            : ui::displayResolutionsForScreen(screenW, screenH);
+        if (!canResizeWindow_) {
+            LOG_INFO("Resolutions offered:");
+            for (std::size_t i = 0; i < displayResolutions_.size(); ++i) {
+                LOG_INFO("  ", displayResolutions_[i].width, "x",
+                         displayResolutions_[i].height,
+                         displayResolutions_[i].native ? " (the screen itself)" : "");
+            }
+        }
+    }
 #if defined(WOWEE_IOS)
     // SDL 3.2.24 creates its UIWindow with initWithFrame: and never gives
     // it a scene; a scene-based app never displays such a window (black
@@ -523,6 +546,17 @@ void Window::clearRenderResolution() {
     renderResolutionWidth = 0;
     renderResolutionHeight = 0;
     LOG_WARNING("The world will be drawn at the screen's own size");
+}
+
+int Window::getDisplayResolutionIndex() const {
+    return displayResolutionIndex_;
+}
+
+void Window::setDisplayResolutionIndex(int index) {
+    if (index < 0 || index >= static_cast<int>(displayResolutions_.size())) return;
+    displayResolutionIndex_ = index;
+    const auto& resolution = displayResolutions_[static_cast<std::size_t>(index)];
+    applyResolution(resolution.width, resolution.height);
 }
 
 } // namespace core
