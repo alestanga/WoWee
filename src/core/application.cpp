@@ -1348,26 +1348,7 @@ void Application::run() {
     // be given an environment and the per-stage breakdown is the only way to
     // see where the frame time goes there.
     if (!frameProfileEnabled_) {
-        std::ifstream profileIn(core::getConfigRoot() + "/settings.cfg");
-        std::string profileLine;
-        while (std::getline(profileIn, profileLine)) {
-            const size_t eq = profileLine.find('=');
-            if (eq == std::string::npos) continue;
-            std::string key = profileLine.substr(0, eq);
-            std::string value = profileLine.substr(eq + 1);
-            const auto trim = [](std::string& s) {
-                const char* ws = " \t\r\n";
-                const size_t b = s.find_first_not_of(ws);
-                const size_t e = s.find_last_not_of(ws);
-                s = (b == std::string::npos) ? "" : s.substr(b, e - b + 1);
-            };
-            trim(key);
-            trim(value);
-            if (key == "frameprofile") {
-                frameProfileEnabled_ = (value == "1" || value == "true");
-                break;
-            }
-        }
+        frameProfileEnabled_ = core::configFlag("frameprofile");
     }
     if (frameProfileEnabled_) {
         LOG_WARNING("Frame timing profile enabled - the per-stage breakdown will be "
@@ -5210,6 +5191,23 @@ void Application::reportStageTimes() {
                  << stat.worstMs << "ms worst, "
                  << static_cast<int>(100.0 * total / windowMs) << "% of the window";
             if (loud) LOG_WARNING(line.str()); else LOG_INFO(line.str());
+        }
+
+        // What endFrame itself was made of: recording the commands, versus
+        // submitting them and getting the picture out. If the second is the
+        // frame, the GPU or the display is the limit and drawing less will not
+        // help; if the first is, the frame has more in it than it can record.
+        if (renderer->endFrameRecordMs() + renderer->endFrameSubmitMs() > 0.0) {
+            std::ostringstream split;
+            split << "  endFrame split: record "
+                  << renderer->endFrameRecordMs() << "ms, submit+present "
+                  << renderer->endFrameSubmitMs() << "ms";
+            if (renderer->getVkContext()) {
+                split << " (end cmd " << renderer->getVkContext()->endCmdMs()
+                      << ", queue submit " << renderer->getVkContext()->submitMs()
+                      << ", present " << renderer->getVkContext()->presentMs() << ")";
+            }
+            if (loud) LOG_WARNING(split.str()); else LOG_INFO(split.str());
         }
     }
 
