@@ -83,22 +83,28 @@ def matches(path, patterns):
 def build_filter(profile, maps):
     """Return a predicate over manifest 'p' paths.
 
-    maps, when given, narrows terrain/maps to the named ones. It is applied
-    after the profile, so a profile that excludes terrain entirely stays
+    maps, when given, narrows the world maps to the named ones. It is applied
+    after the profile, so a profile that excludes the world entirely stays
     excluded.
+
+    The maps live under world/maps/<name>/, which is where the client reads
+    the terrain from and where an extraction puts it. The narrowing used to
+    look under terrain/maps/, which is not a directory any extraction has - so
+    it never matched anything and --maps did nothing at all, whatever it was
+    told.
     """
     include = profile.get("include", [])
     exclude = profile.get("exclude", [])
     wanted_maps = None
     if maps and not any(m.strip().lower() == "all" for m in maps):
-        wanted_maps = ["terrain/maps/%s/**" % m.strip().lower() for m in maps if m.strip()]
+        wanted_maps = ["world/maps/%s/**" % m.strip().lower() for m in maps if m.strip()]
 
     def keep(path):
         if not matches(path, include):
             return False
         if matches(path, exclude):
             return False
-        if wanted_maps is not None and path.startswith("terrain/maps/"):
+        if wanted_maps is not None and path.startswith("world/maps/"):
             return matches(path, wanted_maps)
         return True
 
@@ -280,7 +286,7 @@ def main():
     parser.add_argument("--out", help="where to write the subset (not needed with --dry-run)")
     parser.add_argument("--profile", default="login", help="a profile from data_profiles.json")
     parser.add_argument("--maps",
-                        help="comma separated map names to keep under terrain/maps, "
+                        help="comma separated map names to keep under world/maps, "
                              "or 'all' for every map the extraction has")
     parser.add_argument("--copy", action="store_true",
                         help="copy instead of hard linking, for a different filesystem")
