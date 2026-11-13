@@ -122,6 +122,10 @@ Measured 2026-11-10 on an iPad Air 11" (M3), 2360x1640.
 
   So the first thing a Release build has to answer is whether the frame is
   still 76 ms of GPU time. If it is not, nothing below needs chasing.
+- *(The next two bullets were measured on that Debug build and are kept only
+  as history - the Release numbers supersede them, in "Release measurements"
+  below. Debug `endFrame` was 75-80 ms; Release `endFrame` is 33 ms with
+  synchronous submits and 0.04 ms with them turned off.)*
 - **The frame is GPU-bound.** Every render stage is under 50 ms except
   `endFrame`, which sits continuously at **75-80 ms** - post-process, the UI
   overlay, submit and the present wait. That is ~13 fps at native resolution,
@@ -179,20 +183,104 @@ Measured 2026-11-10 on an iPad Air 11" (M3), 2360x1640.
   So the route is open but it is a project, not a flag. FSR1 is the
   Vulkan-native equivalent and is already wired.
 
+### Release measurements (2026-11-12 to 11-13)
+
+Everything here is Release, in-world, standing still outdoors with an
+unmoved camera, at 786x546 internal upscaled by FSR1, `view_distance=1600`,
+`shadow_distance=350`, after a 50 s settle. Only settled windows are
+compared: a world 18 s after `SMSG_LOGIN_VERIFY_WORLD` reads GPU 15 ms
+against 35-40 ms settled, and believed a false result once.
+
+**The frame is exactly 50.00 ms - 20.00 fps.** 201 frames per 10 s window,
+reproduced across runs in two different zones and over an 8-hour overnight
+run. The model that fits everything measured:
+
+    frame ~= CPU record (renderWorld 2.4-4.9ms, prepare 0.06ms, plus
+             update/UI) + GPU (35-43ms) serialised
+
+GPU marks (BOTTOM_OF_PIPE, so they resolve to the render pass and include
+any queue gap): world 19-22, shadows 7.4, volumetric fog 4.0-4.1,
+post-process 1.95, interface 0.33-2.15. Recording is free - command
+recording 0.02 ms, present 0.01 ms, terrain CPU 0.12, wmo 0.35, m2 2.1-4.8.
+
+**The 30 -> 20 fps drop is a step, not decay.** Login holds 30.00 fps for
+3 minutes, the world holds 29.45-29.85 for ~30 s, then steps to 20.43 and
+sits at exactly 20.00 for 12 minutes. Two causes: a ~33.3 ms floor inside
+`vkQueueSubmit` when the GPU is light (the menu submit blocks 31.9 ms while
+the GPU is at 3.15 ms - and it is not present-mode pacing: the menu is
+30.00 fps with IMMEDIATE and 29.95 with FIFO), and world streaming raising
+GPU time 15.5 -> 35.1 ms, so CPU 14 + GPU 35 lands on 50.
+
+**Pass ablation** (`passablation=1`, 50 s settle `ablationsettle`, 13
+phases, 4.0 s each + 0.75 s warmup, drift across the run -0.01 ms):
+
+| pass off | ms/frame | worth |
+|---|---|---|
+| shadows | 43.84 | **+6.15** |
+| wmo | 46.52 | **+3.47** |
+| volumetric fog | 47.29 | **+2.70** |
+| terrain / doodads / characters / sky / sun shafts / doodads past 250 y | 49.99-50.03 | 0 |
+| ground clutter alone | 62.89 | -12.90 (noise) |
+| grass | 53.19 | -3.20 (noise) |
+
+The zeros are real, not a wiring miss - each skip gates its actual draw
+path (the `skipTerrain`/`skipM2`/... block in `renderer.cpp`) - and they
+make sense: at 786x546 with Hi-Z holding drawn chunks to ~700 of 12k-24k
+resident, terrain and the instanced doodads are sub-millisecond of fill.
+The two negative rows are single hitches polluting a 64-76 frame mean (one
+~900 ms frame is +12.9 ms of mean), not passes that cost negative time.
+**Everything selectable in the scene pass is worth ~12 ms total.**
+
+**`asyncsubmit=1` frees the CPU and changes no fps.** The MoltenVK config
+reaches the driver (`synchronousQueueSubmits=1` read back, turned off
+through the deprecated `vkGet/SetMoltenVKConfigurationMVK`):
+
+- `endFrame` 32.99 ms/frame (65% of the window) -> **0.04 ms (0%)**
+- `renderWorld` 4.87 -> 2.45 ms/frame
+- fps: **20.00 -> 20.00**, frame 50.00 ms either way
+- GPU marks 35 -> 40-44 ms (world 22, shadows 11.0, fog 4.1, post 1.95,
+  interface 2.15)
+
+So the 33.3 ms synchronous-submit floor is a menu/idle phenomenon; in the
+world the frame is bound by GPU time, and once the CPU no longer blocks in
+submit the frame tracks the GPU mark instead. The mark rose with the
+change - either it reads truer now that the CPU inserts no sync points
+between passes, or the GCD submission path adds bubbles; either way the
+frame time did not move. **60 fps now means GPU 43 -> under 17 ms.**
+
+**The device lost did not reproduce.** One `beginFrame` fence wait came
+back `-4` a second after a swapchain rebuild (2026-11-12 21:51:25,
+`currentExtent=2360x1640` then fence `-4`). The overnight run after it:
+91,817 log lines, 8 hours in-world, 0 device lost, no background/foreground
+transitions, and the new lifecycle logging shows swapchain-dirty only at
+startup (the vsync toggle and window events 519/532).
+
+**`pom=0` is dead** (measured earlier: 50.0/38.8 GPU vs 50.0/35.2
+baseline).
+
 ### Open performance work (next session)
 
-1. **Rebuild Release and re-measure.** Everything measured so far was
-   measured on a Debug build with the validation layer loaded, which is not a
-   measurement of the client. `tools/ios-fsr-measure.sh` does the
-   comparison; it needs a Release build to be worth anything.
-2. If the frame is still 76 ms of GPU time after that, the levers in order
-   of cost on a tiler:
-   - `antialiasing=0` - 2x MSAA at 2360x1640 is 7.7M samples and a
-     full-screen resolve.
-   - `pom=0` - 32 parallax steps per pixel on WMO and character surfaces.
-   - the resolution selector, now that it sets the internal resolution.
-   - `shadowdistance` 300 -> 150, and the view distance.
-   - the heavy settings in the saved profile (16x aniso, particles 100%,
-     water refraction), and a working pipeline cache on iOS.
+The frame is GPU-bound at ~43 ms of marks, every selectable scene pass
+together is ~12 ms, and the CPU is free. In order:
 
-   `tools/ios-fsr-measure.sh` measures against a baseline and prints both.
+1. **Re-run the pass ablation with `asyncsubmit=1`.** The table above was
+   measured while the CPU was serialised in submit, which is exactly the
+   condition the GPU marks warn about (queue gaps charged to the pass they
+   land in). Now that wall-clock follows the GPU, attribute the unexplained
+   remainder of the world mark (~17 ms once WMO's 3.5 is taken out) -
+   water, particles, the Hi-Z occlusion work, or queue starvation.
+2. **Shadow distance** - the largest measured lever (6.15 ms wall-clock,
+   11 ms of mark), and `shadow_distance` is already a config key (350 now).
+3. **View distance** (`view_distance=1600`) against the WMO/terrain
+   remainder, and volumetric fog (2.7 ms, `fog_strength`/`mist_density`).
+4. The settings levers still untested on Release: 16x aniso / particles
+   100% / water refraction, a working pipeline cache on iOS, and the
+   internal resolution itself (already 786x546; lower is more fps).
+5. Hi-Z occlusion culling is disabled at `renderer.cpp:3764` -
+   re-enabling it is a draw-count lever the ablation cannot see (it only
+   switches passes off, it does not add culling).
+6. `glslc` for the 8 missing shaders - no Homebrew on the Mac, so the
+   LunarG SDK route (397 MB tarball) is the way; deferred until the
+   baseline above is stable.
+
+`tools/ios-fsr-measure.sh` measures against a baseline and prints both.
