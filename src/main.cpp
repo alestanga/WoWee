@@ -1,6 +1,8 @@
 #include "core/application.hpp"
 #include "core/config_paths.hpp"
+#if defined(WOWEE_IOS)
 #include "core/ios_platform.hpp"
+#endif
 #include "core/logger.hpp"
 #include "core/version.hpp"
 #include <exception>

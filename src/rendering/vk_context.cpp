@@ -1315,6 +1315,31 @@ void VkContext::savePipelineCache() {
 /// which makes VK_SUBOPTIMAL_KHR the permanent answer from then on.
 
 
+#if !defined(WOWEE_IOS)
+// Ask for a swapchain in the window's own orientation rather than the
+// surface's native one. A rotated display reports a non-identity transform,
+// and presenting without pre-transforming to match shows the image rotated;
+// on iOS the surface supports only the identity transform (Info.plist locks
+// the app to landscape), so the iOS path below skips this and logs the
+// capabilities instead.
+static bool requestIdentityTransform(vkb::SwapchainBuilder& builder,
+                                     VkPhysicalDevice physicalDevice,
+                                     VkSurfaceKHR surface) {
+    VkSurfaceCapabilitiesKHR caps{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &caps) != VK_SUCCESS) {
+        return false;
+    }
+    if (caps.currentTransform == VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) return false;
+    if (!(caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)) {
+        LOG_WARNING("Surface reports transform 0x", std::hex, caps.currentTransform, std::dec,
+                    " and cannot present unrotated; the image will be rotated");
+        return false;
+    }
+    builder.set_pre_transform_flags(VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR);
+    return true;
+}
+#endif
+
 bool VkContext::createSwapchain(int width, int height) {
     vkb::SwapchainBuilder swapchainBuilder{physicalDevice, device, surface};
 
@@ -1325,9 +1350,11 @@ bool VkContext::createSwapchain(int width, int height) {
         .set_desired_min_image_count(2)
         .set_old_swapchain(swapchain);
 
-    // On iOS, request the identity transform so we render into the window's
-    // actual orientation rather than the device's native portrait space.
-    // (MoltenVK otherwise reports a portrait extent for a landscape window.)
+#if defined(WOWEE_IOS)
+    // On iOS the surface supports only the identity transform, so there is no
+    // pre-transform to request; log the capabilities so a run can verify that
+    // stayed true. (MoltenVK otherwise reports a portrait extent for a
+    // landscape window.)
     VkSurfaceCapabilitiesKHR _caps{};
     if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &_caps) == VK_SUCCESS) {
         LOG_WARNING("iOS surface: currentExtent=", _caps.currentExtent.width, "x", _caps.currentExtent.height,
@@ -1335,6 +1362,9 @@ bool VkContext::createSwapchain(int width, int height) {
                     " supportedTransforms=0x", std::hex, _caps.supportedTransforms, std::dec);
     }
     presentsOffNativeTransform_ = false;
+#else
+    presentsOffNativeTransform_ = requestIdentityTransform(builder, physicalDevice, surface);
+#endif
 
     if (vsync_) {
         builder.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR);
@@ -2737,9 +2767,11 @@ bool VkContext::recreateSwapchain(int width, int height) {
         .set_desired_min_image_count(2)
         .set_old_swapchain(oldSwapchain);
 
-    // On iOS, request the identity transform so we render into the window's
-    // actual orientation rather than the device's native portrait space.
-    // (MoltenVK otherwise reports a portrait extent for a landscape window.)
+#if defined(WOWEE_IOS)
+    // On iOS the surface supports only the identity transform, so there is no
+    // pre-transform to request; log the capabilities so a run can verify that
+    // stayed true. (MoltenVK otherwise reports a portrait extent for a
+    // landscape window.)
     VkSurfaceCapabilitiesKHR _caps{};
     if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &_caps) == VK_SUCCESS) {
         LOG_WARNING("iOS surface: currentExtent=", _caps.currentExtent.width, "x", _caps.currentExtent.height,
@@ -2747,6 +2779,9 @@ bool VkContext::recreateSwapchain(int width, int height) {
                     " supportedTransforms=0x", std::hex, _caps.supportedTransforms, std::dec);
     }
     presentsOffNativeTransform_ = false;
+#else
+    presentsOffNativeTransform_ = requestIdentityTransform(builder, physicalDevice, surface);
+#endif
 
     if (vsync_) {
         builder.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR);
