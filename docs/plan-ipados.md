@@ -338,10 +338,20 @@ remains, in order:
 5. Hi-Z occlusion culling is disabled at `renderer.cpp:3764` -
    re-enabling it is a draw-count lever the ablation cannot see (it only
    switches passes off, it does not add culling).
-6. `glslc` for the 8 missing shaders - no Homebrew on the Mac, so the
-   LunarG SDK route (397 MB tarball) is the way; this also re-enables
-   grass/M2 culling (`grass_cull.comp.spv`, `m2_cull_hiz.comp.spv` fail
-   to load at startup).
+6. ~~`glslc` for the 8 missing shaders~~ - **done**: the vcpkg `shaderc`
+   port (classic mode, `pkg-config` on `PATH`) provides `glslc`, and
+   `-DGLSLC=...` opens CMake's gate (method in `ios/README.md`,
+   "Shaders"). The first build recompiled all 90 shaders and rewrote the
+   84 committed `.spv` (same source, different compiler revision) -
+   restored with `git checkout -- assets/shaders/`; later builds are
+   incremental. Verified on device: the 20:17:00 launch logged **0
+   ERROR lines**, where every earlier launch failed on
+   `grass_cull.comp.spv`, `m2_cull_hiz.comp.spv` and
+   `world_map_fog.frag.spv` - grass and M2 occlusion culling now have
+   their pipelines, so re-measure the world pass under motion with
+   culling on. Open follow-up: the eight `.spv` are gitignored, so a
+   clone without `glslc` still lacks them - force-add them or generate
+   them in CI before the PR.
 7. Measurement hygiene: **push both `settings.cfg` and `cvars.cfg`** to
    the device, or the CVar store silently reverts the bound keys.
 
