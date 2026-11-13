@@ -1325,7 +1325,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
 
     # Link MoltenVK (static) when available, so Vulkan symbols resolve at
     # link time instead of via dynamic_lookup at runtime.  The framework lives
-    # under extern/MoltenVK (downloaded separately; see tools/build-ios-deps.sh).
+    # under extern/MoltenVK (obtained separately - KhronosGroup/MoltenVK at
+    # v1.4.2, whose repo ships the prebuilt xcframework; see ios/README.md).
     set(_MV_XCFW "${CMAKE_CURRENT_SOURCE_DIR}/extern/MoltenVK/MoltenVK/MoltenVK/static/MoltenVK.xcframework")
     if(CMAKE_OSX_SYSROOT MATCHES "imulator")
         set(_MV_SLICE "ios-arm64_x86_64-simulator")
