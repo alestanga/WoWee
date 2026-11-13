@@ -59,6 +59,38 @@ xcodebuild -project build-ios/wowee.xcodeproj -scheme wowee \
 If `CMakeLists.txt` changed, build twice: ZERO_CHECK regenerates the
 `.xcodeproj` mid-build and the first compile can run with stale settings.
 
+### Shaders
+
+CMake compiles every `assets/shaders/*.glsl` to `.spv` itself, but only
+when it can find `glslc` (`find_program(GLSLC glslc ...)`); without it
+the compile rules are never generated and the committed `.spv` are used
+as they are. Eight shaders have never been committed - `grass`,
+`grass_cull`, `hiz_build`, `m2_cull_hiz`, `world_map_fog` and the two
+`editor_water` stages - so a build machine without `glslc` produces an
+app that logs three load errors at startup and runs with grass and M2
+occlusion culling off.
+
+Any `glslc` works (Vulkan SDK, shaderc). Without Homebrew on this Mac
+the route used here is the vcpkg `shaderc` port in classic mode -
+manifest mode refuses package arguments, so run it from the vcpkg root,
+and `pkg-config` must be on `PATH` (the corsix tools tree has it):
+
+```
+cd <vcpkg> && ./vcpkg install shaderc --triplet arm64-osx
+cmake -B build-ios -DGLSLC=<vcpkg>/installed/arm64-osx/tools/shaderc/glslc
+```
+
+Two quirks worth knowing:
+
+- The first build after `GLSLC` appears recompiles **all** the shaders
+  and rewrites the 84 committed `.spv` in place (same source, different
+  compiler revision - the diffs are in the instruction stream, not the
+  header). `git checkout -- assets/shaders/` puts them back; later
+  builds are incremental and do not touch them.
+- The eight new `.spv` are covered by the `*.spv` ignore rule, so they
+  stay local until force-added. A clone on a machine without `glslc`
+  still lacks them.
+
 ### Signing
 
 Signing is automatic, with the team passed at configure time as above
@@ -169,11 +201,14 @@ What the port has been exercised on:
   `tools/android/make_minimal_data.py`. Login, character select and
   in-world play are verified. The Vanilla 1.12 and TBC 2.4.3 protocol paths
   are the shared desktop code and were not exercised on the device.
-- **Performance:** a steady 20 fps in-world at 786x546 internal (FSR1 to
-  the panel's 2360x1640), GPU-bound. `frameprofile=1` logs per-stage CPU
-  and GPU times, and `docs/plan-ipados.md` section 8 has the measured
-  attribution and the lever list. The same frame time held through an
-  8-hour continuous run, with no crashes.
+- **Performance:** 60 fps standing still at 786x546 internal (FSR1 to
+  the panel's 2360x1640); under motion a median of ~39 fps at 786x546
+  and ~26 fps at 1770x1230, GPU-bound. (The steady 20 fps earlier builds
+  showed was a vsync value replayed from `cvars.cfg` at world entry, not
+  the hardware - section 8 has that finding.) `frameprofile=1` logs
+  per-stage CPU and GPU times, and `docs/plan-ipados.md` section 8 has
+  the measured attribution and the lever list. The same frame time held
+  through an 8-hour continuous run, with no crashes.
 - **Isolation:** every source file the port touches compiles in a host
   (non-iOS) configuration, and the platform-specific pieces sit behind
   `WOWEE_IOS` / `__ANDROID__` / `if(CMAKE_SYSTEM_NAME STREQUAL "iOS")`.
@@ -184,11 +219,13 @@ What the port has been exercised on:
   compiled in and hidden behind the same mouse-present check, but the port
   has only ever been driven by keyboard and mouse; fingers have not been
   tried.
-- **Eight shaders in `assets/shaders` have no built `.spv`** - the build
-  machine has no `glslc`. The client loads three of them at startup, logs
-  an error and continues: `grass_cull.comp` (GPU grass culling),
+- **Eight shaders in `assets/shaders` had no built `.spv`** - the build
+  machine had no `glslc`. The client loads three of them at startup,
+  logged an error and continued: `grass_cull.comp` (GPU grass culling),
   `m2_cull_hiz.comp` (M2 occlusion culling) and `world_map_fog.frag`
-  (the world-map fog overlay). Building the eight needs `glslc`.
+  (the world-map fog overlay). They now build (see **Shaders** under
+  Build); the residual gap is that the eight `.spv` are gitignored, so a
+  clone on a machine without `glslc` still lacks them.
 - **No sound** with the `login` and `world` data profiles; only `full`
   carries `sound/`.
 - **Doodads drop out of very dense scenes**: the M2 instance buffer holds
