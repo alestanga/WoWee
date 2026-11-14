@@ -29,6 +29,7 @@
 #include <utility>
 #include "core/logger.hpp"
 #include "core/memory_monitor.hpp"
+#include "core/text_input.hpp"
 #include "rendering/renderer.hpp"
 #include "rendering/loot_sparkles.hpp"
 #include "rendering/vk_context.hpp"
@@ -1464,8 +1465,11 @@ void Application::run() {
         ui::KeybindingManager::getInstance().beginInputFrame();
         ui::ageChatSlashEcho();
 
-        // Ask for text input while one of the interface's edit boxes has the
-        // keyboard.
+        // Text input is up only while something is actually typing, and is
+        // always started with the platform's typing assists off
+        // (core/text_input.hpp): SDL's plain start defaults to autocorrect on
+        // and sentence capitalization, and iPadOS autocorrect rewrites what
+        // the player types in chat.
         //
         // SDL2 delivered SDL_TEXTINPUT from the start and nothing had to ask.
         // SDL3 does not - and ImGui's backend calls SDL_StopTextInput every
@@ -1474,12 +1478,46 @@ void Application::run() {
         // the code that opens the box, and not one character after it arrived.
         // Asserted per frame rather than on a focus change because the backend
         // can turn it off again at any point.
+        //
+        // Stopping is the other half, and until now nothing stopped it: only
+        // an ImGui field losing focus did. Once a Lua edit box had taken the
+        // keyboard it never gave it back, so UIKit's hidden text field stayed
+        // first responder for the rest of the session - which is what raises
+        // the accented-letter popup when a movement key is held down.
         if (window && addonManager_ && addonsLoaded_) {
-            if (auto* engine = addonManager_->getLuaEngine();
-                engine && engine->editBoxHasFocus()) {
-                if (SDL_Window* sdlWindow = window->getSDLWindow();
-                    sdlWindow && !SDL_TextInputActive(sdlWindow)) {
-                    SDL_StartTextInput(sdlWindow);
+            if (auto* engine = addonManager_->getLuaEngine()) {
+                if (SDL_Window* sdlWindow = window->getSDLWindow(); sdlWindow) {
+                    // Whoever wants typed characters this frame: a Lua edit
+                    // box (chat), an ImGui field, or a Lua frame that enabled
+                    // the keyboard - StackSplitFrame reads its digits from
+                    // OnChar. ImGui's value is last frame's here, which is
+                    // fine: a one-frame-old answer only delays the start by
+                    // one frame, and ui_manager's transition below starts
+                    // for ImGui in the same frame it changes.
+                    const bool wanted = engine->editBoxHasFocus()
+                                     || ImGui::GetIO().WantTextInput
+                                     || engine->keyboardFrameWantsText();
+                    const SDL_PropertiesID props = wowee::core::textInputNoAssistProperties();
+                    if (!SDL_TextInputActive(sdlWindow)) {
+                        textInputNoAssistApplied_ = false;
+                        if (wanted) {
+                            SDL_StartTextInputWithProperties(sdlWindow, props);
+                            textInputNoAssistApplied_ = true;
+                        }
+                    } else if (!wanted) {
+                        SDL_StopTextInput(sdlWindow);
+                        textInputNoAssistApplied_ = false;
+                    } else if (!textInputNoAssistApplied_) {
+                        // Running, but not started by us: the ImGui backend
+                        // starts one with plain SDL_StartTextInput, whose
+                        // defaults would switch the assists back on. SDL
+                        // applies properties even to an active session, so
+                        // one call here corrects it - once per session, not
+                        // per frame, because each call re-adds the UIKit text
+                        // field to the view.
+                        SDL_StartTextInputWithProperties(sdlWindow, props);
+                        textInputNoAssistApplied_ = true;
+                    }
                 }
             }
         }
