@@ -21,6 +21,10 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#ifdef __APPLE__
+#include <pthread.h>
+#include <pthread/qos.h>
+#endif
 
 namespace wowee {
 namespace game {
@@ -612,6 +616,13 @@ void WardenHandler::handleWardenData(network::Packet& packet) {
             if (wardenRequestHasCodeScan(decrypted, wardenCheckOpcodes_) && !wardenResponsePending_) {
                 LOG_DEBUG("Warden: PAGE_A/PAGE_B detected - building response async to avoid main-loop stall");
                 wardenPendingEncrypted_ = std::async(std::launch::async, [decrypted, ctx]() {
+#ifdef __APPLE__
+                    // This task hashes megabytes of image data (scan(0) plus
+                    // the module-image fallback). Keep the whole response
+                    // build below the frame pool: at default QoS it competes
+                    // with visibility classification and stalls frames.
+                    pthread_set_qos_class_self_np(QOS_CLASS_UTILITY, 0);
+#endif
                     return buildWardenCheckResponse(decrypted, ctx, "async");
                 });
                 wardenResponsePending_ = true;
