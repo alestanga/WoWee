@@ -562,8 +562,28 @@ private:
     std::unique_ptr<RenderGraph> renderGraph_;
     void buildFrameGraph(game::GameHandler* gameHandler);
 
-    // HiZ occlusion culling - builds depth pyramid each frame
+    // HiZ occlusion culling - builds depth pyramid each frame. Created and
+    // retired against whatever the scene pass writes its depth into this
+    // frame (updateHiZSource), built once after the scene pass closes
+    // (recordHiZBuild), and never waited on: the build is recorded into the
+    // same command buffer as the cull that reads the previous one.
     std::unique_ptr<HiZSystem> hizSystem_;
+    /// The depth the scene pass writes this frame, or null when it cannot be
+    /// sampled (not built yet, or multisampled without a resolve).
+    VkImage hizDepthSource() const;
+    /// Make hizSystem_ match hizDepthSource(), creating and retiring it as
+    /// the render resolution, upscaler or sample count moves the buffer.
+    void updateHiZSource();
+    /// Record this frame's pyramid build, at most once no matter how many
+    /// places ask: the scene pass closes either inside post-processing (where
+    /// the hook fires) or in endFrame, and only one of them happens.
+    void recordHiZBuild(VkCommandBuffer cmd);
+    bool hizBuiltThisFrame_ = false;
+    /// The source a failed initialization was attempted for, so a failure
+    /// retries when the source changes and not every frame.
+    VkImage hizFailedSource_ = VK_NULL_HANDLE;
+    uint32_t hizFailedWidth_ = 0;
+    uint32_t hizFailedHeight_ = 0;
 
     // Volumetric fog: a froxel volume built after the shadow pass and read by
     // every world shader through set 0 binding 2.

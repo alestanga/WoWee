@@ -892,7 +892,13 @@ bool Renderer::initialize(core::Window* win) {
     // The ray traced lighting normally records where the water leaves the
     // scene pass. A multisampled scene in an off-screen target never leaves
     // it early, so the pass records here instead, as the upscaler takes over.
-    postProcessPipeline_->setSceneClosedHook([this](VkCommandBuffer) {
+    postProcessPipeline_->setSceneClosedHook([this](VkCommandBuffer cmd) {
+        // The scene pass has just closed and its depth is still in the layout
+        // the render pass left it in - the one moment a pyramid build can read
+        // it, before FSR2's motion vectors or the water history copy move it.
+        // First, so the ray traced lighting below sees the same depth layouts
+        // it did when this hook only carried the rays.
+        recordHiZBuild(cmd);
         if (rtRecordedThisFrame_ || !postProcessPipeline_) return;
         recordRtLighting(postProcessPipeline_->getSceneDepthImage(),
                          postProcessPipeline_->getSceneRenderExtent(),
@@ -1189,16 +1195,10 @@ void Renderer::applyMsaaChange() {
         minimap->recreatePipelines();
     }
 
-    // Resize HiZ pyramid (depth format/MSAA may have changed)
-    if (hizSystem_) {
-        auto ext = vkCtx->getSwapchainExtent();
-        if (!hizSystem_->resize(ext.width, ext.height)) {
-            LOG_WARNING("HiZ resize failed after MSAA change");
-            if (m2Renderer) m2Renderer->setHiZSystem(nullptr);
-            hizSystem_->shutdown();
-            hizSystem_.reset();
-        }
-    }
+    // The HiZ pyramid is not resized here: it is pointed at whatever depth
+    // the scene pass writes, which this call is about to change by destroying
+    // and remaking the post-process targets. updateHiZSource() at the top of
+    // the next frame notices the new buffer and rebuilds against it.
 
     // Selection circle + overlay + FSR use lazy init, just destroy them
     if (overlaySystem_) overlaySystem_->recreatePipelines();
@@ -1275,6 +1275,9 @@ void Renderer::beginFrame() {
     }
 
     worldDrawnThisFrame_ = false;
+    // Whether the pyramid build has been recorded this frame; the scene pass
+    // can close in two different places and only one of them may build.
+    hizBuiltThisFrame_ = false;
 
     // Apply deferred MSAA change between frames (before any rendering state is used)
     if (msaaChangePending_) {
@@ -1344,16 +1347,9 @@ void Renderer::beginFrame() {
         }
         // Recreate post-process resources for new swapchain dimensions
         if (postProcessPipeline_) postProcessPipeline_->handleSwapchainResize();
-        // Resize HiZ depth pyramid for new swapchain dimensions
-        if (hizSystem_) {
-            auto ext = vkCtx->getSwapchainExtent();
-            if (!hizSystem_->resize(ext.width, ext.height)) {
-                LOG_WARNING("HiZ resize failed - disabling occlusion culling");
-                if (m2Renderer) m2Renderer->setHiZSystem(nullptr);
-                hizSystem_->shutdown();
-                hizSystem_.reset();
-            }
-        }
+        // No HiZ resize here either: a new swapchain depth (or a new scene
+        // target under an upscaler) is a new image, and updateHiZSource()
+        // recreates the pyramid against it before this frame's cull runs.
     }
 
     // Between frames, so a resize of the ray traced lighting's images can wait
@@ -1389,6 +1385,12 @@ void Renderer::beginFrame() {
     // directly into the normal frame command buffer. The old path submitted a
     // separate command buffer and synchronously waited on a fence every frame,
     // serializing CPU and GPU work solely to obtain same-frame cull results.
+    //
+    // Before the dispatch, because the dispatch is what reads the HiZ pyramid:
+    // the system has to exist and be pointed at the depth this frame's scene
+    // pass will write, which the render resolution, the upscaler and the
+    // sample count all move.
+    updateHiZSource();
     if (m2Renderer && camera && vkCtx) {
         uint32_t frame = vkCtx->getCurrentFrame();
         m2Renderer->invalidateCullOutput(frame);
@@ -1502,6 +1504,12 @@ void Renderer::endFrame() {
     // open is the scene pass, begun for secondary buffers, and a checkpoint or
     // timestamp recorded inline into it is invalid.
     if (postProcessPipeline_ && vkCtx) vkCtx->gpuMark(currentCmd, "post-process");
+
+    // When something post-processed, the hook fired as its scene pass closed
+    // and the build is already in; when nothing did, this is that moment - the
+    // scene depth is out of every pass and still in the layout the render pass
+    // left it, before the water copy reads it. Either way at most one build.
+    recordHiZBuild(currentCmd);
 
     // Only when water could not be moved out of the scene pass (MSAA). Otherwise
     // renderWorld already took the copy at the one point in the frame where the
@@ -3809,10 +3817,12 @@ bool Renderer::initializeRenderers(pipeline::AssetManager* assetManager, const s
         }
     }
 
-    // HiZ occlusion culling disabled - the pyramid build + blocking fence was
-    // the main frame-rate bottleneck.  GPU frustum culling alone provides good
-    // draw-call reduction without the per-frame GPU stall.  HiZ can be re-
-    // enabled once the pyramid build is moved to an async compute queue.
+    // HiZ occlusion culling is wired per frame rather than created here: the
+    // pyramid follows whatever depth the scene pass writes (updateHiZSource,
+    // called at the top of beginFrame before the cull dispatch) and is built
+    // once the scene pass closes (recordHiZBuild). No fence and no second
+    // submit - the build is recorded into the same command buffer, which is
+    // what the old wiring's blocking fence did that made this a bottleneck.
     if (!wmoRenderer) {
         wmoRenderer = std::make_unique<WMORenderer>();
         if (!wmoRenderer->initialize(vkCtx, perFrameSetLayout, assetManager))
@@ -4661,6 +4671,99 @@ VkExtent2D Renderer::sceneRenderExtent() const {
         return postProcessPipeline_->getSceneRenderExtent();
     }
     return vkCtx->getSwapchainExtent();
+}
+
+VkImage Renderer::hizDepthSource() const {
+    if (!vkCtx) return VK_NULL_HANDLE;
+    // Whichever depth this frame's scene pass writes: the post pipeline's own
+    // target while the scene renders off-screen (an upscaler or FXAA is on),
+    // VkContext's when it renders where the player will see it. A multisampled
+    // one without a resolve cannot be sampled at all - buildPyramid reads it
+    // as a texture - so the answer there is null and the cull stays
+    // frustum-only, which is what it was before any of this existed.
+    if (postProcessPipeline_ && postProcessPipeline_->getSceneFramebuffer() != VK_NULL_HANDLE) {
+        if (postProcessPipeline_->sceneDepthIsMsaa()) return VK_NULL_HANDLE;
+        return postProcessPipeline_->getSceneDepthImage();
+    }
+    if (vkCtx->isDepthCopySourceMsaa()) return VK_NULL_HANDLE;
+    return vkCtx->getDepthCopySourceImage();
+}
+
+void Renderer::updateHiZSource() {
+    // Measurement switch: hizcull=0 in settings.cfg retires the pyramid so a
+    // run can compare the same scene with and without it, the way asyncsubmit
+    // is switched. Read once at the first frame - flipping it means a restart,
+    // which a config push already does. Absent is on, the shipped default.
+    static const bool hizDisabled = (core::configSetting("hizcull") == "0");
+    const VkImage depth = hizDisabled ? VK_NULL_HANDLE : hizDepthSource();
+    if (depth == VK_NULL_HANDLE) {
+        if (hizSystem_) {
+            if (m2Renderer) m2Renderer->setHiZSystem(nullptr);
+            hizSystem_->shutdown();
+            hizSystem_.reset();
+            // A later frame whose source comes back may be the one that works;
+            // a failure should not latch across unrelated buffers.
+            hizFailedSource_ = VK_NULL_HANDLE;
+        }
+        return;
+    }
+
+    const VkExtent2D ext = sceneRenderExtent();
+    if (hizSystem_ && hizSystem_->matches(depth, ext.width, ext.height)) {
+        // m2Renderer is built at world entry, after this system usually is:
+        // hand the pointer over on the path that does nothing else, or the
+        // cull would never learn the pyramid exists. A plain store, every
+        // frame, which also covers a renderer recreated on a map transition.
+        if (m2Renderer) m2Renderer->setHiZSystem(hizSystem_.get());
+        return;
+    }
+    if (hizFailedSource_ == depth && hizFailedWidth_ == ext.width &&
+        hizFailedHeight_ == ext.height) {
+        return;  // this exact buffer already refused to initialize
+    }
+
+    // The source moved - a resolution, upscaler or MSAA change - so the old
+    // system is rebuilt against it rather than patched: the depth sampler
+    // views wrap the image handle and the pyramid is sized from the extent.
+    // shutdown() waits for the device, which is acceptable at the frequency a
+    // player changes a setting and nowhere else.
+    if (hizSystem_) {
+        if (m2Renderer) m2Renderer->setHiZSystem(nullptr);
+        hizSystem_->shutdown();
+        hizSystem_.reset();
+    }
+    auto hiz = std::make_unique<HiZSystem>();
+    if (hiz->initialize(vkCtx, depth, ext.width, ext.height)) {
+        hizSystem_ = std::move(hiz);
+        hizFailedSource_ = VK_NULL_HANDLE;
+        if (m2Renderer) m2Renderer->setHiZSystem(hizSystem_.get());
+        LOG_INFO("HiZ occlusion culling on: ", ext.width, "x", ext.height, " depth");
+    } else {
+        hizFailedSource_ = depth;
+        hizFailedWidth_ = ext.width;
+        hizFailedHeight_ = ext.height;
+        LOG_WARNING("HiZ init failed for this depth buffer - M2 cull stays frustum-only");
+    }
+}
+
+void Renderer::recordHiZBuild(VkCommandBuffer cmd) {
+    if (hizBuiltThisFrame_ || !hizSystem_ || !hizSystem_->isReady() || !vkCtx) return;
+    // A change made after this frame's updateHiZSource() retired the buffer
+    // under us: building would read an image the post pipeline has already
+    // destroyed. Skip the one build; the next frame's update rebuilds the
+    // system against whatever replaced it, and the cull meanwhile reads the
+    // pyramid's own image, which this system owns and still holds.
+    const VkImage depth = hizDepthSource();
+    if (depth != hizSystem_->depthSource()) return;
+    // Two marks around the build rather than one after it: the interval named
+    // "hiz build" is the pyramid's own cost, which is what a hizcull=0 run has
+    // to beat. One mark would measure back to whatever was recorded last -
+    // "world total" when the scene-closed hook fired, "post-process" when this
+    // function is the fallback - and those two answer different questions.
+    vkCtx->gpuMark(cmd, "hiz");
+    hizSystem_->buildPyramid(cmd, vkCtx->getCurrentFrame(), depth);
+    vkCtx->gpuMark(cmd, "hiz build");
+    hizBuiltThisFrame_ = true;
 }
 
 void Renderer::recordRtLighting(VkImage sceneDepth, VkExtent2D sceneExtent, bool depthIsMsaa) {

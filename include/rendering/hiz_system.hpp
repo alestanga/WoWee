@@ -36,12 +36,19 @@ public:
 
     /**
      * Create all Vulkan resources.
-     * @param ctx       Vulkan context (device, allocator, etc.)
-     * @param width     Full-resolution depth buffer width
-     * @param height    Full-resolution depth buffer height
+     * @param ctx        Vulkan context (device, allocator, etc.)
+     * @param depthImage The depth buffer builds read from, kept as the
+     *                   source for the life of this system. Must be
+     *                   single-sampled and created with
+     *                   VK_IMAGE_USAGE_SAMPLED_BIT - the scene's own
+     *                   depth, not a stand-in, because it moves with the
+     *                   render resolution, the upscaler and the sample
+     *                   count.
+     * @param width      Depth buffer width
+     * @param height     Depth buffer height
      * @return true on success
      */
-    [[nodiscard]] bool initialize(VkContext* ctx, uint32_t width, uint32_t height);
+    [[nodiscard]] bool initialize(VkContext* ctx, VkImage depthImage, uint32_t width, uint32_t height);
 
     /**
      * Release all Vulkan resources.
@@ -81,6 +88,22 @@ public:
     [[nodiscard]] bool isReady() const { return ready_; }
 
     /**
+     * Whether this system was built for exactly the given depth source and
+     * size. The source moves when the render resolution, the upscaler or the
+     * sample count changes; the owner recreates rather than patches, so this
+     * is the question it asks before every frame's cull.
+     */
+    [[nodiscard]] bool matches(VkImage depthImage, uint32_t width, uint32_t height) const {
+        return ready_ && depthImage_ == depthImage &&
+               sourceWidth_ == width && sourceHeight_ == height;
+    }
+
+    /**
+     * @return The depth image builds read; what buildPyramid must be given.
+     */
+    [[nodiscard]] VkImage depthSource() const { return depthImage_; }
+
+    /**
      * @return Number of mip levels in the pyramid.
      */
     [[nodiscard]] uint32_t getMipLevels() const { return mipLevels_; }
@@ -101,6 +124,12 @@ private:
 
     VkContext* ctx_ = nullptr;
     bool ready_ = false;
+
+    // The depth buffer this system reads, and the size it was built for.
+    // Wrapped by depthSamplerView_ and named by matches().
+    VkImage depthImage_ = VK_NULL_HANDLE;
+    uint32_t sourceWidth_ = 0;
+    uint32_t sourceHeight_ = 0;
 
     uint32_t pyramidWidth_ = 0;
     uint32_t pyramidHeight_ = 0;

@@ -13,9 +13,12 @@ HiZSystem::~HiZSystem() {
     shutdown();
 }
 
-bool HiZSystem::initialize(VkContext* ctx, uint32_t width, uint32_t height) {
-    if (!ctx || width == 0 || height == 0) return false;
+bool HiZSystem::initialize(VkContext* ctx, VkImage depthImage, uint32_t width, uint32_t height) {
+    if (!ctx || !depthImage || width == 0 || height == 0) return false;
     ctx_ = ctx;
+    depthImage_ = depthImage;
+    sourceWidth_ = width;
+    sourceHeight_ = height;
 
     // Pyramid mip 0 is half the full resolution (the first downscale)
     pyramidWidth_ = std::max(1u, width / 2);
@@ -43,6 +46,9 @@ void HiZSystem::shutdown() {
 
     ctx_ = nullptr;
     ready_ = false;
+    depthImage_ = VK_NULL_HANDLE;
+    sourceWidth_ = 0;
+    sourceHeight_ = 0;
 }
 
 bool HiZSystem::resize(uint32_t width, uint32_t height) {
@@ -56,6 +62,10 @@ bool HiZSystem::resize(uint32_t width, uint32_t height) {
     pyramidWidth_ = std::max(1u, width / 2);
     pyramidHeight_ = std::max(1u, height / 2);
     mipLevels_ = static_cast<uint32_t>(std::floor(std::log2(std::max(pyramidWidth_, pyramidHeight_)))) + 1;
+    // Same depth image, new size: matches() compares these too, so they move
+    // with the pyramid or a resize would read as a different source forever.
+    sourceWidth_ = width;
+    sourceHeight_ = height;
 
     if (!createPyramidImage()) return false;
     if (!createDescriptors()) { destroyPyramidImage(); return false; }
@@ -285,7 +295,10 @@ bool HiZSystem::createDescriptors() {
         // This is SEPARATE from the VkContext's depth image view because we need
         // DEPTH aspect sampling which requires specific format view.
         {
-            VkImage depthSrc = ctx_->getDepthCopySourceImage();
+            // The scene's own depth, handed in by the owner: with an upscaler
+            // or FXAA on, the scene renders into the post pipeline's target
+            // and VkContext's depth is not the buffer that was written.
+            VkImage depthSrc = depthImage_;
             VkImageViewCreateInfo viewCi{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
             viewCi.image = depthSrc;
             viewCi.viewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -419,12 +432,19 @@ void HiZSystem::buildPyramid(VkCommandBuffer cmd, uint32_t frameIndex, VkImage d
         cmdPipelineBarrier2(cmd, barrierDep);
     }
 
-    // Transition entire pyramid to GENERAL layout for storage writes
+    // Transition entire pyramid to GENERAL layout for storage writes.
+    //
+    // srcStage is the compute stage rather than TOP_OF_PIPE because the cull
+    // dispatch that reads this slot runs earlier in the same command buffer:
+    // without that ordering a WAR race lets this rewrite land under the reads
+    // that are the point of the slot. oldLayout stays UNDEFINED - every mip is
+    // about to be rewritten - and the WAW against this slot's previous frame's
+    // build is ordered by the frame fence, which beginFrame has already waited.
     {
         VkImageMemoryBarrier2 barrier{.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
-        barrier.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+        barrier.srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
         barrier.dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-        barrier.srcAccessMask = 0;
+        barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
