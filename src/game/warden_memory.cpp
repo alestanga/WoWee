@@ -1071,7 +1071,16 @@ bool WardenMemory::searchCodePattern(const uint8_t seed[4], const uint8_t expect
     // the rest. The answer is the same whichever thread finds it.
     size_t totalPositions = 0;
     for (const auto& r : ranges) totalPositions += r.end - r.start - patternLen + 1;
-    const unsigned threadCount = std::clamp(std::thread::hardware_concurrency(), 1u, 16u);
+    unsigned threadCount = std::clamp(std::thread::hardware_concurrency(), 1u, 16u);
+#ifdef WOWEE_IOS
+    // The tablet needs half its cores to draw the frame: a scan owning all
+    // eight starves the m2 visibility workers, and even at utility QoS the
+    // frame stretches from 16.7ms to ~23ms for the whole scan window. Four
+    // threads leave the renderer room and still finish a check well inside
+    // the server's 30-44s cadence, so the sync fallback on the request gate
+    // stays unused. Desktop keeps every core.
+    threadCount = std::min(threadCount, 4u);
+#endif
     std::atomic<bool> found{false};
     std::atomic<size_t> foundAt{0};
     auto scan = [&](unsigned part) {
