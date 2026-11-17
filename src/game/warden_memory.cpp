@@ -1033,6 +1033,15 @@ bool WardenMemory::searchCodePattern(const uint8_t seed[4], const uint8_t expect
     // If hint-only mode, skip the expensive brute-force search.
     if (hintOnly) return false;
 
+#ifdef WOWEE_IOS
+    // The server module is Windows x86 and cannot execute on ARM; the
+    // brute-force fallback hashes megabytes of the PE image for ~12 CPU-
+    // seconds on every check, which is what stretches the frame by ~7ms
+    // through a whole scan window. Known patterns were already answered by
+    // the cache and the hint fast path above - only unknown ones land here.
+    // Answer "not found" instead of scanning; desktop keeps every check.
+    return false;
+#endif
     // --- Brute-force fallback: search all PE sections ---
     struct Range { size_t start; size_t end; };
     std::vector<Range> ranges;
